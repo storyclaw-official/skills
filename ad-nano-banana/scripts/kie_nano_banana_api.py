@@ -3,6 +3,7 @@
 """
 kie平台 Nano Banana Pro API 封装脚本
 支持文生图、图生图和多图融合(最多8张)
+支持自动下载图像到本地
 使用方法: python kie_nano_banana_api.py --prompt "图像描述" [其他参数]
 """
 
@@ -12,6 +13,9 @@ import time
 import json
 import argparse
 import requests
+import urllib.request
+from pathlib import Path
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
@@ -210,6 +214,49 @@ class KieNanoBananaAPI:
             return []
 
 
+def download_images(image_urls: List[str], output_dir: str, output_format: str = "png") -> List[str]:
+    """
+    下载图像到本地
+
+    Args:
+        image_urls: 图像URL列表
+        output_dir: 输出目录
+        output_format: 输出格式(png/jpg)
+
+    Returns:
+        下载的文件路径列表
+    """
+    # 确定下载目录
+    download_path = Path(output_dir).expanduser()
+    download_path.mkdir(parents=True, exist_ok=True)
+
+    # 生成时间戳
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 下载所有图像
+    downloaded_files = []
+    for i, url in enumerate(image_urls, 1):
+        try:
+            # 生成文件名
+            if len(image_urls) == 1:
+                filename = f"nano_banana_{timestamp}.{output_format}"
+            else:
+                filename = f"nano_banana_{timestamp}_{i}.{output_format}"
+
+            filepath = download_path / filename
+
+            # 下载图像
+            print(f"下载图像 {i}/{len(image_urls)}...", file=sys.stderr)
+            urllib.request.urlretrieve(url, filepath)
+            downloaded_files.append(str(filepath))
+            print(f"✓ 图像已下载: {filepath}", file=sys.stderr)
+
+        except Exception as e:
+            print(f"✗ 下载失败 (图像 {i}): {e}", file=sys.stderr)
+
+    return downloaded_files
+
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
@@ -220,17 +267,23 @@ def parse_args():
   # 文生图 - 根据描述生成图像
   python kie_nano_banana_api.py --prompt "一只可爱的猫咪"
 
+  # 生成并下载图像
+  python kie_nano_banana_api.py --prompt "一只可爱的猫咪" --download
+
   # 图生图 - 使用参考图像
   python kie_nano_banana_api.py --prompt "转为油画风格" --image-input "https://example.com/photo.jpg"
 
   # 多图融合 - 融合多张图像
   python kie_nano_banana_api.py --prompt "融合这些图像的风格" --image-input "url1" "url2" "url3"
 
-  # 指定比例和清晰度
-  python kie_nano_banana_api.py --prompt "未来城市" --aspect-ratio 16:9 --resolution 4K
+  # 指定比例、清晰度并下载
+  python kie_nano_banana_api.py --prompt "未来城市" --aspect-ratio 16:9 --resolution 4K --download
 
   # 查询已存在的任务
   python kie_nano_banana_api.py --query --task-id "your_task_id"
+
+  # 查询并下载
+  python kie_nano_banana_api.py --query --task-id "your_task_id" --download
 
 环境变量:
   KIE_API_KEY    kie平台的API密钥(必需)
@@ -262,6 +315,12 @@ def parse_args():
     parser.add_argument('--image-input', type=str, nargs='+',
                        help='参考图像URL(支持多个,最多8张)')
 
+    # 下载参数
+    parser.add_argument('--download', action='store_true',
+                       help='自动下载生成的图像到本地')
+    parser.add_argument('--output-dir', type=str, default='~/Downloads',
+                       help='下载保存目录(默认: ~/Downloads)')
+
     # 任务管理参数
     parser.add_argument('--no-wait', action='store_true',
                        help='不等待任务完成,创建后立即返回')
@@ -277,7 +336,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def print_output(image_urls: List[str], prompt: str, output_json: bool = False):
+def print_output(image_urls: List[str], prompt: str, output_json: bool = False, downloaded_files: Optional[List[str]] = None):
     """
     输出结果
 
@@ -285,6 +344,7 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False):
         image_urls: 图像URL列表
         prompt: 原始提示词
         output_json: 是否以JSON格式输出
+        downloaded_files: 下载的文件路径列表
     """
     if output_json:
         # JSON格式输出
@@ -293,6 +353,8 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False):
             "imageUrls": image_urls,
             "imageCount": len(image_urls)
         }
+        if downloaded_files:
+            output_data["downloadedFiles"] = downloaded_files
         print(json.dumps(output_data, ensure_ascii=False, indent=2))
     else:
         # 文本格式输出(美化版)
@@ -305,6 +367,13 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False):
         print()
         for i, url in enumerate(image_urls, 1):
             print(f"图像 #{i}: {url}")
+
+        if downloaded_files:
+            print()
+            print("下载文件:")
+            for i, filepath in enumerate(downloaded_files, 1):
+                print(f"文件 #{i}: {filepath}")
+
         print("=" * 60)
 
 
@@ -344,11 +413,20 @@ def main():
                 try:
                     param = json.loads(param_str)
                     prompt = param.get("input", {}).get("prompt", "")
+                    output_format = param.get("input", {}).get("output_format", "png")
                 except json.JSONDecodeError:
                     prompt = ""
+                    output_format = "png"
 
                 print(f"\n生成了 {len(image_urls)} 张图像\n", file=sys.stderr)
-                print_output(image_urls, prompt, args.json)
+
+                # 下载图像
+                downloaded_files = None
+                if args.download and image_urls:
+                    print("\n下载图像...", file=sys.stderr)
+                    downloaded_files = download_images(image_urls, args.output_dir, output_format)
+
+                print_output(image_urls, prompt, args.json, downloaded_files)
             else:
                 print(f"任务尚未完成或失败: {state}", file=sys.stderr)
                 if data.get("failMsg"):
@@ -389,7 +467,14 @@ def main():
                 )
                 image_urls = client.extract_image_urls(final_result)
                 print(f"\n生成了 {len(image_urls)} 张图像\n", file=sys.stderr)
-                print_output(image_urls, args.prompt, args.json)
+
+                # 下载图像
+                downloaded_files = None
+                if args.download and image_urls:
+                    print("\n下载图像...", file=sys.stderr)
+                    downloaded_files = download_images(image_urls, args.output_dir, args.output_format)
+
+                print_output(image_urls, args.prompt, args.json, downloaded_files)
             else:
                 print(f"任务ID: {task_id}", file=sys.stderr)
                 print(f"可使用以下命令查询: python {sys.argv[0]} --query --task-id {task_id}", file=sys.stderr)

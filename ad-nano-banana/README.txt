@@ -1,11 +1,11 @@
-# generating-images-with-nano-banana 技能
+# ad-nano-banana 技能
 
 使用 Nano Banana Pro 模型生成 AI 图像(通过 kie.ai 平台)
 
 ## 安装
 
 ```bash
-claude skills install generating-images-with-nano-banana.skill
+claude skills install ad-nano-banana.skill
 ```
 
 ## 输出字段
@@ -30,18 +30,25 @@ export KIE_API_KEY="your-api-key"
 python3 scripts/kie_nano_banana_api.py --prompt "一只可爱的猫咪"
 ```
 
+生成并下载:
+```bash
+python3 scripts/kie_nano_banana_api.py --prompt "一只可爱的猫咪" --download
+```
+
 图生图:
 ```bash
 python3 scripts/kie_nano_banana_api.py \
   --prompt "转为油画风格" \
-  --image-input "https://example.com/photo.jpg"
+  --image-input "https://example.com/photo.jpg" \
+  --download
 ```
 
 多图融合:
 ```bash
 python3 scripts/kie_nano_banana_api.py \
   --prompt "融合这些图像的风格" \
-  --image-input "url1" "url2" "url3"
+  --image-input "url1" "url2" "url3" \
+  --download
 ```
 
 JSON 输出:
@@ -71,6 +78,10 @@ python3 scripts/kie_nano_banana_api.py --prompt "测试" --json
   - 选项: png, jpg
 - `--image-input`: 参考图像URL(最多8张)
 
+**下载参数:**
+- `--download`: 自动下载图像到本地
+- `--output-dir`: 下载保存目录(默认~/Downloads)
+
 **任务管理:**
 - `--no-wait`: 不等待完成,立即返回
 - `--max-wait`: 最大等待时间(秒,默认300)
@@ -84,18 +95,27 @@ python3 scripts/kie_nano_banana_api.py --prompt "测试" --json
 
 社交媒体(1:1):
 ```bash
---aspect-ratio 1:1 --resolution 2K
+--aspect-ratio 1:1 --resolution 2K --download
 ```
 
 横屏壁纸(16:9):
 ```bash
---aspect-ratio 16:9 --resolution 4K
+--aspect-ratio 16:9 --resolution 4K --download
 ```
 
 竖屏壁纸(9:16):
 ```bash
---aspect-ratio 9:16 --resolution 2K
+--aspect-ratio 9:16 --resolution 2K --download
 ```
+
+## 下载功能
+
+✅ 使用 Python 内置 urllib,不依赖系统环境
+✅ 自动创建下载目录
+✅ 自动处理文件名冲突
+✅ 跨平台支持(macOS/Linux/Windows)
+
+**重要提示:** 图像URL有效期有限,建议使用 `--download` 立即下载!
 
 ## 文档
 
@@ -114,10 +134,10 @@ python3 scripts/kie_nano_banana_api.py --prompt "测试" --json
 
 ```bash
 export KIE_API_KEY="your-api-key"
-python3 scripts/kie_nano_banana_api.py --prompt "测试图像" --json
+python3 scripts/kie_nano_banana_api.py --prompt "测试图像" --download --json
 ```
 
 ## 版本
 
-- 版本: v1.0
+- 版本: v1.1
 - 日期: 2026-02-11
