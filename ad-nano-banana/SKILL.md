@@ -7,469 +7,352 @@ description: 使用 Nano Banana Pro 模型(通过 kie.ai 平台)生成 AI 图像
 
 使用 Nano Banana Pro 模型(通过 kie.ai 平台)生成 AI 图像。支持从简单的文本描述到多图融合的高级创作。
 
-## 使用引导流程
+## 核心输出
+
+脚本输出包含 3 个关键字段:
+
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| **prompt** | string | 图像描述提示词 |
+| **imageUrls** | string[] | 生成的图像 URL 数组 |
+| **imageCount** | integer | 生成的图像数量 |
+
+## 交互式引导流程
 
 **当用户请求"生成一张图片"或类似模糊请求时,按以下流程引导:**
 
-### 步骤 1: 检查图像比例
+### 步骤 1: 收集图像比例
 
-使用 AskUserQuestion 工具询问:
+使用 AskUserQuestion 工具:
 
 ```
 问题: "您需要什么比例的图像?"
+header: "图像比例"
 选项:
-- "1:1 正方形 (社交媒体头像、Instagram帖子)"
-- "16:9 横屏 (电脑壁纸、YouTube封面)"
-- "9:16 竖屏 (手机壁纸、短视频)"
+- "1:1 - 正方形(社交媒体/头像)"
+- "16:9 - 横屏(壁纸/封面)"
+- "9:16 - 竖屏(手机/Stories)"
 - "其他比例"
+
+multiSelect: false
 ```
 
-**如果用户选择"其他比例",继续询问:**
+**如果选择"其他比例",继续询问:**
 ```
-问题: "请选择具体比例:"
-选项:
-- "2:3 (照片竖版)"
-- "3:2 (照片横版)"
-- "4:3 (传统屏幕)"
-- "21:9 (超宽屏)"
-- "auto (自动)"
+选项: 2:3 (竖版照片) | 3:2 (横版照片) | 4:3 (传统屏幕) | 21:9 (超宽屏) | auto (自动)
 ```
 
-### 步骤 2: 检查清晰度
+**💡 推荐:**
+- 社交媒体: 1:1 (Instagram)
+- 横屏壁纸: 16:9
+- 手机壁纸: 9:16
+- 打印照片: 4:3 或 2:3
 
-使用 AskUserQuestion 工具询问:
+---
+
+### 步骤 2: 确定清晰度
+
+使用 AskUserQuestion 工具:
 
 ```
 问题: "您需要什么清晰度?"
+header: "清晰度"
 选项:
-- "2K (推荐) - 平衡质量和速度"
-- "4K - 最高质量,适合打印"
-- "1K - 快速预览"
+- "2K (推荐) - 平衡质量和速度 (~30-60秒)"
+- "4K - 最高质量,适合打印 (~60-120秒)"
+- "1K - 快速预览 (~15-30秒)"
+
+multiSelect: false
 ```
 
-### 步骤 3: 收集提示词
+---
+
+### 步骤 3: 收集图像描述
 
 询问用户:
 ```
-问题: "请描述您想要生成的图像内容:"
+问题: "请描述您想要生成的图像内容"
 ```
 
-**提示词最佳实践提示:**
-- 建议用户提供详细描述,包括:
-  - 主体内容(如"一只橘色的猫")
-  - 场景/背景(如"坐在窗边")
-  - 风格/氛围(如"水彩画风格,温暖的光线")
-  - 细节要求(如"高细节,专业摄影")
+**💡 提示词建议** (简要版):
+- **主体**: 明确描述主要内容(如"一只橘色的猫")
+- **场景**: 添加环境描述(如"坐在窗边")
+- **风格**: 指定艺术风格(如"水彩画风格")
+- **细节**: 补充氛围和光线(如"温暖的阳光,高细节")
 
-### 步骤 4: 检查是否使用参考图
+**好的示例**:
+- "一只橘色猫咪坐在窗边,阳光洒进,水彩画风格,温馨氛围"
+- "未来城市,赛博朋克风格,霓虹灯,夜景,高细节"
 
-使用 AskUserQuestion 工具询问:
+**避免**: "猫"(太简短) | "好看的图片"(过于模糊)
+
+📖 **完整指南**: 参考 PROMPT_GUIDE.md 获取详细的提示词最佳实践
+
+---
+
+### 步骤 4: 确定生成模式
+
+使用 AskUserQuestion 工具:
 
 ```
 问题: "是否需要使用参考图像?"
+header: "生成模式"
 选项:
-- "不需要,只根据文字描述生成"
-- "是,我有1张参考图(图生图)"
-- "是,我有多张参考图(多图融合,最多8张)"
+- "不需要 - 纯文生图"
+- "1张参考图 - 图生图(风格转换)"
+- "多张参考图 - 多图融合(最多8张)"
+
+multiSelect: false
 ```
 
-#### 情况 A: 不需要参考图 → **文生图模式**
+#### 模式 A: 纯文生图
 
-直接执行生成命令:
-
+直接执行生成:
 ```bash
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "用户的提示词" \
+  --prompt "用户的描述" \
   --aspect-ratio "16:9" \
-  --resolution "2K"
+  --resolution "2K" \
+  --download
 ```
 
-#### 情况 B: 需要 1 张参考图 → **图生图模式**
+#### 模式 B: 图生图(1张参考图)
 
-收集参考图信息:
-1. 询问用户提供图像URL
-2. 验证URL可访问性(可选)
-3. 执行生成命令:
-
+收集参考图 URL,然后执行:
 ```bash
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "用户的提示词" \
-  --image-input "https://example.com/reference.jpg" \
+  --prompt "转为油画风格,保留构图" \
+  --image-input "https://example.com/photo.jpg" \
   --aspect-ratio "16:9" \
-  --resolution "2K"
+  --resolution "2K" \
+  --download
 ```
 
-**图生图提示词建议:**
-- 描述想要的转换效果,如:
-  - "转为油画风格"
-  - "转为卡通风格,保留主体"
-  - "移除背景,保留人物"
-  - "增强色彩,专业摄影风格"
+**💡 图生图提示词建议**:
+- "转为[风格],保持主体"
+- "增强色彩,专业摄影风格"
+- "移除背景,保留人物"
 
-#### 情况 C: 需要多张参考图 → **多图融合模式**
+#### 模式 C: 多图融合(2-8张)
 
-收集参考图信息:
-1. 询问用户需要几张参考图(最多8张)
-2. 逐一收集每张图的URL
-3. 执行生成命令:
-
+收集多张参考图 URL,然后执行:
 ```bash
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "用户的提示词" \
+  --prompt "融合这些图像的风格" \
   --image-input "url1" "url2" "url3" \
   --aspect-ratio "16:9" \
-  --resolution "2K"
+  --resolution "2K" \
+  --download
 ```
 
-**多图融合提示词建议:**
-- 描述融合效果,如:
-  - "融合这些图像的风格"
-  - "结合第一张的构图和第二张的色彩"
-  - "将这些元素组合成一个场景"
+**💡 多图融合提示词建议**:
+- "融合这些图像的艺术风格"
+- "结合图1的构图和图2的色彩"
+- "将这些元素组合成和谐场景"
 
-### 步骤 5: 执行并询问下载
+---
 
-生成完成后,**主动询问**用户:
+### 步骤 5: 执行生成
+
+1. **运行脚本**,显示进度
+2. **等待完成** (1K: 15-30秒 | 2K: 30-60秒 | 4K: 60-120秒)
+3. **显示结果** (图像 URL 和下载路径)
+
+**默认行为**: 使用 `--download` 自动下载到 `~/Downloads/`
+
+**文件命名**: `nano_banana_YYYYMMDD_HHMMSS.png`
+
+---
+
+### 步骤 6: 反馈和迭代 ✨
+
+生成完成后,**主动询问**:
 
 ```
-问题: "图像已生成完成!是否需要下载图像到本地?"
+问题: "图像已生成!您对结果满意吗?"
+header: "结果评估"
 选项:
-- "是,下载到下载文件夹"
-- "不用,我只需要查看链接"
+- "满意,已完成"
+- "需要调整提示词重新生成"
+- "需要更改比例或清晰度"
+- "需要添加/更改参考图"
+
+multiSelect: false
 ```
 
-**如果用户选择下载,按以下步骤操作:**
+#### 如果需要调整:
 
-1. **确定下载目录**(根据用户操作系统):
-   - **macOS/Linux**: `~/Downloads/`
-   - **Windows**: `%USERPROFILE%\Downloads\` 或 `C:\Users\用户名\Downloads\`
+**调整提示词**: 返回步骤 3,根据用户反馈优化描述
+- 提示用户: "可以更具体地描述想要的效果,比如调整风格、色彩、光线等"
 
-2. **生成文件名**:
-   - 格式: `nano_banana_YYYYMMDD_HHMMSS.png` (或 .jpg,根据输出格式)
-   - 示例: `nano_banana_20260211_143025.png`
-   - 如果有多张图像: `nano_banana_20260211_143025_1.png`, `nano_banana_20260211_143025_2.png`
+**更改参数**: 返回步骤 1 或 2,修改比例或清晰度
+- 提示用户: "可以尝试不同的比例或提升到 4K"
 
-3. **执行下载**:
-   ```bash
-   python3 scripts/kie_nano_banana_api.py \
-     --download \
-     --image-urls "url1" "url2" \
-     --output-dir "~/Downloads"
-   ```
+**调整参考图**: 返回步骤 4,更换或添加参考图
+- 提示用户: "可以提供其他参考图或移除某些参考图"
 
-   或直接在脚本中使用 Python 的 urllib 下载图像:
-   ```python
-   import urllib.request
-   from pathlib import Path
+**💡 迭代建议**:
+- 第一次生成可以使用 1K 快速测试
+- 满意后再生成 2K 或 4K 高清版本
+- 每次调整一个方面(提示词、比例或参考图)
 
-   # 确定下载目录
-   download_dir = Path.home() / "Downloads"
+---
 
-   # 下载图像
-   for i, url in enumerate(image_urls, 1):
-       filename = f"nano_banana_{timestamp}_{i}.png"
-       filepath = download_dir / filename
-       urllib.request.urlretrieve(url, filepath)
-       print(f"✓ 图像已下载: {filepath}")
-   ```
+## 工作流检查清单 ✅
 
-4. **告知用户下载结果**:
-   - 显示下载的文件路径
-   - 提示下载完成
+在执行生成前,确认以下要点:
 
-**重要提示:**
-- 图像URL有效期有限,建议及时下载
-- 下载使用 Python 内置的 urllib 模块,不依赖系统环境
-- 自动处理文件名冲突(如有同名文件则添加序号)
+- [ ] 图像比例是否符合最终用途?
+- [ ] 清晰度是否满足质量要求?
+- [ ] 提示词是否包含主体、场景、风格?
+- [ ] 提示词长度 ≤ 20000 字符?
+- [ ] 参考图(如有)数量 ≤ 8 张?
+- [ ] 参考图 URL 是否可公开访问?
+- [ ] API 密钥是否已设置? (`echo $KIE_API_KEY`)
 
-## 输出信息说明
-
-脚本输出包含以下 3 个关键字段:
-
-| 字段 | 类型 | 说明 | 示例 |
-|-----|------|------|------|
-| prompt | string | 图像描述提示词 | "一只可爱的猫咪" |
-| imageUrls | array | 生成的图像URL数组 | ["https://..."] |
-| imageCount | integer | 生成的图像数量 | 1 |
+---
 
 ## Quick Start
 
 ### 1. 环境配置
 
-**设置 API 密钥:**
+设置 API 密钥:
 ```bash
 export KIE_API_KEY="your-api-key-here"
 ```
 
-获取 API 密钥: https://kie.ai/api-key
+获取密钥: https://kie.ai/api-key
 
-**验证配置:**
+验证配置:
 ```bash
-echo $KIE_API_KEY  # 应显示你的 API 密钥
+echo $KIE_API_KEY  # 应显示你的密钥
 ```
 
-### 2. 基本用法
+### 2. 最简单的使用
 
-最简单的生成方式 - 只需提供描述:
-
+只需提供描述:
 ```bash
 python3 scripts/kie_nano_banana_api.py --prompt "一只可爱的猫咪"
 ```
 
-### 3. 下载图像
+### 3. 生成并下载
 
-生成并直接下载图像:
-
+推荐用法(自动下载):
 ```bash
 python3 scripts/kie_nano_banana_api.py \
   --prompt "一只可爱的猫咪" \
   --download
 ```
 
-## 生成模式详解
+📖 **更多示例**: 参考 EXAMPLES.md 获取 18+ 完整使用示例
 
-### 模式 1: 文生图(Text-to-Image)
+---
 
-根据文本描述生成全新图像。
+## 生成模式
 
-**使用场景:**
-- 创意概念可视化
-- 艺术创作
-- 内容创作(博客配图、社交媒体)
+| 模式 | 使用场景 | 关键参数 |
+|-----|---------|---------|
+| **文生图** | 根据描述创建全新图像 | `--prompt` |
+| **图生图** | 风格转换、图像优化 | `--prompt` + `--image-input` (1张) |
+| **多图融合** | 创意拼贴、风格混合 | `--prompt` + `--image-input` (2-8张) |
 
-**命令示例:**
-```bash
-# 基础文生图
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "一只坐在窗边的橘猫,温暖的阳光洒进来"
+---
 
-# 指定比例和清晰度
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "未来主义城市,赛博朋克风格,霓虹灯,夜景" \
-  --aspect-ratio 16:9 \
-  --resolution 4K
-
-# 生成并下载
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "极简logo设计,现代感,蓝色系" \
-  --aspect-ratio 1:1 \
-  --resolution 2K \
-  --download
-```
-
-### 模式 2: 图生图(Image-to-Image)
-
-使用一张参考图像进行转换或风格迁移。
-
-**使用场景:**
-- 风格转换
-- 图像优化
-- 创意改造
-
-**命令示例:**
-```bash
-# 风格转换
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "转为油画风格,保留原始构图" \
-  --image-input "https://example.com/photo.jpg" \
-  --resolution 2K \
-  --download
-
-# 图像优化
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "增强色彩,专业摄影风格,高细节" \
-  --image-input "https://example.com/raw.jpg" \
-  --resolution 4K \
-  --download
-```
-
-### 模式 3: 多图融合(Multi-Image Fusion)
-
-融合多张图像(最多8张)创造新的视觉效果。
-
-**使用场景:**
-- 创意拼贴
-- 风格混合
-- 元素组合
-
-**命令示例:**
-```bash
-# 融合两张图像的风格
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "融合这两张图像的风格,创造新的艺术作品" \
-  --image-input "https://example.com/style1.jpg" "https://example.com/style2.jpg" \
-  --aspect-ratio 16:9 \
-  --download
-
-# 组合多个元素
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "将这些元素组合成一个和谐的场景" \
-  --image-input "url1" "url2" "url3" "url4" \
-  --resolution 4K \
-  --download
-```
-
-## 参数说明
+## 核心参数
 
 ### 必需参数
 
-| 参数 | 类型 | 说明 | 约束 |
-|-----|------|------|------|
-| --prompt | string | 图像描述提示词 | ≤ 20000 字符 |
+- `--prompt`: 图像描述 (≤ 20000 字符)
 
-### 可选参数
+### 常用参数
 
-| 参数 | 类型 | 默认值 | 说明 | 选项 |
-|-----|------|--------|------|------|
-| --aspect-ratio | string | 1:1 | 图像比例 | 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9, auto |
-| --resolution | string | 2K | 图像清晰度 | 1K, 2K, 4K |
-| --output-format | string | png | 输出格式 | png, jpg |
-| --image-input | string[] | [] | 参考图像URL | ≤ 8 张 |
+| 参数 | 默认值 | 选项 |
+|-----|--------|------|
+| `--aspect-ratio` | 1:1 | 1:1, 16:9, 9:16, 2:3, 3:2, 4:3, 21:9, auto |
+| `--resolution` | 2K | 1K, 2K, 4K |
+| `--output-format` | png | png, jpg |
+| `--image-input` | - | 最多 8 个 URL |
 
 ### 下载参数
 
-| 参数 | 类型 | 默认值 | 说明 |
-|-----|------|--------|------|
-| --download | flag | false | 自动下载生成的图像到本地 |
-| --output-dir | string | ~/Downloads | 下载保存目录 |
+- `--download`: 自动下载到本地
+- `--output-dir`: 指定下载目录 (默认 ~/Downloads)
 
-### 任务管理参数
+### 任务管理
 
-| 参数 | 类型 | 默认值 | 说明 |
-|-----|------|--------|------|
-| --no-wait | flag | false | 不等待任务完成,立即返回 |
-| --max-wait | integer | 300 | 最大等待时间(秒) |
-| --poll-interval | integer | 5 | 轮询间隔(秒) |
+- `--no-wait`: 异步模式,立即返回
+- `--max-wait`: 最大等待时间(秒,默认 300)
+- `--query --task-id`: 查询已创建的任务
 
-### 输出控制参数
+### 输出格式
 
-| 参数 | 类型 | 默认值 | 说明 |
-|-----|------|--------|------|
-| --json | flag | false | 以JSON格式输出 |
+- `--json`: JSON 格式输出(便于脚本集成)
 
-## 完整使用示例
+📖 **完整参数说明**: 参考 REFERENCE.md
 
-### 示例 1: 社交媒体配图(生成并下载)
+---
+
+## 快速预设命令
+
+### 社交媒体
 
 ```bash
+# Instagram 帖子 (1:1)
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "现代简约风格的咖啡杯,温暖的早晨光线,专业摄影" \
+  --prompt "你的描述" \
   --aspect-ratio 1:1 \
   --resolution 2K \
   --download
-```
 
-### 示例 2: 电脑壁纸
-
-```bash
+# Instagram Stories (9:16)
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "宁静的山水风景,日落时分,高细节,4K质量" \
-  --aspect-ratio 16:9 \
-  --resolution 4K \
-  --download
-```
-
-### 示例 3: 手机壁纸
-
-```bash
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "抽象艺术,渐变色彩,现代简约" \
+  --prompt "你的描述" \
   --aspect-ratio 9:16 \
   --resolution 2K \
   --download
 ```
 
-### 示例 4: 图像风格转换并下载
+### 壁纸
 
 ```bash
+# 桌面壁纸 (16:9, 4K)
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "转为水彩画风格,柔和的色彩,艺术感" \
-  --image-input "https://example.com/original.jpg" \
+  --prompt "你的描述" \
+  --aspect-ratio 16:9 \
+  --resolution 4K \
+  --download
+
+# 手机壁纸 (9:16, 2K)
+python3 scripts/kie_nano_banana_api.py \
+  --prompt "你的描述" \
+  --aspect-ratio 9:16 \
   --resolution 2K \
   --download
 ```
 
-### 示例 5: 多图创意融合
+📖 **更多预设**: 参考 PRESETS.md 获取完整的场景预设配置
 
-```bash
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "融合这些图像的艺术风格,创造独特的视觉效果" \
-  --image-input "https://example.com/img1.jpg" "https://example.com/img2.jpg" "https://example.com/img3.jpg" \
-  --aspect-ratio 16:9 \
-  --resolution 4K \
-  --download \
-  --output-dir "~/Desktop"
-```
+---
 
-### 示例 6: 仅获取链接(不下载)
+## 图像下载
 
-```bash
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "测试图像生成" \
-  --json
-```
+### 自动下载机制
 
-## 任务管理
-
-### 同步模式(默认)
-
-默认情况下,脚本会等待任务完成后返回结果。
-
-```bash
-python3 scripts/kie_nano_banana_api.py --prompt "描述"
-```
-
-**流程:**
-1. 创建任务 → 获取 taskId
-2. 轮询任务状态(每5秒查询一次)
-3. 任务完成 → 返回图像URL
-4. 任务失败或超时 → 显示错误信息
-
-### 异步模式
-
-使用 `--no-wait` 立即返回 taskId,不等待完成。
-
-```bash
-python3 scripts/kie_nano_banana_api.py --prompt "描述" --no-wait
-```
-
-**输出:**
-```
-✓ 任务创建成功! TaskID: abc123xyz
-任务ID: abc123xyz
-可使用以下命令查询: python scripts/kie_nano_banana_api.py --query --task-id abc123xyz
-```
-
-### 查询任务
-
-使用 taskId 查询已创建任务的状态和结果。
-
-```bash
-python3 scripts/kie_nano_banana_api.py --query --task-id "abc123xyz"
-```
-
-查询完成后可以下载:
-```bash
-python3 scripts/kie_nano_banana_api.py --query --task-id "abc123xyz" --download
-```
-
-## 图像下载功能
-
-### 自动下载
-
-使用 `--download` 参数在生成完成后自动下载图像:
-
+使用 `--download` 参数:
 ```bash
 python3 scripts/kie_nano_banana_api.py \
   --prompt "描述" \
   --download
 ```
 
-**下载流程:**
-1. 生成图像并获取URL
-2. 使用 Python urllib 下载图像文件
-3. 保存到指定目录(默认 ~/Downloads)
-4. 显示下载结果
+**下载特性:**
+- ✅ 使用 Python 内置 urllib,不依赖系统环境
+- ✅ 自动创建下载目录
+- ✅ 文件命名: `nano_banana_YYYYMMDD_HHMMSS.png`
+- ✅ 多图自动编号: `_1.png`, `_2.png`
+- ✅ 跨平台支持 (macOS/Linux/Windows)
+
+**⚠️ 重要**: 图像 URL 有效期有限,建议立即下载!
 
 ### 自定义下载目录
 
@@ -477,26 +360,14 @@ python3 scripts/kie_nano_banana_api.py \
 python3 scripts/kie_nano_banana_api.py \
   --prompt "描述" \
   --download \
-  --output-dir "~/Desktop"
+  --output-dir "~/Desktop/images"
 ```
 
-### 文件命名规则
-
-- 格式: `nano_banana_YYYYMMDD_HHMMSS.png`
-- 多图: `nano_banana_20260211_143025_1.png`, `nano_banana_20260211_143025_2.png`
-- 自动处理文件名冲突
-
-### 下载特点
-
-✅ **不依赖系统环境** - 使用 Python 内置的 urllib 模块
-✅ **自动创建目录** - 如果下载目录不存在则自动创建
-✅ **进度提示** - 显示下载进度和结果
-✅ **错误处理** - 下载失败时显示详细错误信息
-✅ **跨平台支持** - 支持 macOS/Linux/Windows
+---
 
 ## 输出格式
 
-### 文本格式(默认)
+### 文本格式 (默认)
 
 ```
 ============================================================
@@ -505,227 +376,106 @@ python3 scripts/kie_nano_banana_api.py \
 提示词: 一只可爱的猫咪
 生成数量: 1 张
 
-图像 #1: https://static.aiquickdraw.com/tools/example/cat.png
+图像 #1: https://...
+
+下载文件:
+文件 #1: /Users/username/Downloads/nano_banana_20260211_143025.png
 ============================================================
 ```
 
-### 带下载的输出
+### JSON 格式 (--json)
 
-```
-============================================================
-图像生成完成
-============================================================
-提示词: 一只可爱的猫咪
-生成数量: 1 张
-
-图像 #1: https://static.aiquickdraw.com/tools/example/cat.png
-
-下载图像...
-✓ 图像已下载: /Users/username/Downloads/nano_banana_20260211_143025.png
-============================================================
-```
-
-### JSON 格式
-
-使用 `--json` 参数输出JSON格式:
-
-```bash
-python3 scripts/kie_nano_banana_api.py --prompt "描述" --json
-```
-
-**输出:**
 ```json
 {
   "prompt": "一只可爱的猫咪",
-  "imageUrls": [
-    "https://static.aiquickdraw.com/tools/example/cat.png"
-  ],
-  "imageCount": 1
+  "imageUrls": ["https://..."],
+  "imageCount": 1,
+  "downloadedFiles": ["/Users/username/Downloads/..."]
 }
 ```
 
-## 错误处理
+---
 
-### 常见错误及解决方案
+## 异步任务管理
 
-| 错误信息 | 原因 | 解决方案 |
-|---------|------|---------|
-| "错误: 未设置API密钥" | 未配置 KIE_API_KEY | 设置环境变量: `export KIE_API_KEY="your-key"` 或使用 `--api-key` 参数 |
-| "prompt 长度不能超过 20000 字符" | 提示词过长 | 精简描述,保留关键信息 |
-| "最多支持 8 张参考图像" | 参考图数量超限 | 减少参考图数量至8张以内 |
-| "任务失败: ..." | API 任务执行失败 | 检查 failMsg 错误信息,调整参数后重试 |
-| "等待超时 (300秒)" | 任务生成时间过长 | 增加 `--max-wait` 时间或使用 `--no-wait` 异步模式 |
-| "下载失败: ..." | 图像URL无效或网络问题 | 检查网络连接,重新下载或手动下载 |
+### 创建异步任务
 
-## 工作流程建议
-
-### 快速原型
-
-**目标:** 快速验证想法和概念
-
-1. 使用默认参数(1:1, 2K)快速生成
-2. 使用 `--download` 直接保存到本地
-3. 多次迭代,调整提示词
-
-**示例流程:**
-```bash
-# 第一次尝试
-python3 scripts/kie_nano_banana_api.py --prompt "猫咪" --download
-
-# 增加细节
-python3 scripts/kie_nano_banana_api.py --prompt "一只橘色的猫咪" --download
-
-# 添加场景和风格
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "一只橘色的猫咪,坐在窗边,温暖的阳光,水彩画风格" \
-  --download
-```
-
-### 精细创作
-
-**目标:** 生成高质量的最终作品
-
-1. 准备详细的提示词
-2. 选择合适的比例和4K清晰度
-3. 使用 `--download` 保存到指定目录
-
-**示例流程:**
 ```bash
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "宁静的山谷风景,清晨的薄雾,金色的阳光穿过树林,高细节风景摄影,专业色彩" \
-  --aspect-ratio 16:9 \
+  --prompt "描述" \
   --resolution 4K \
-  --download \
-  --output-dir "~/Desktop/作品集"
+  --no-wait
+
+# 输出: TaskID: abc123xyz
 ```
 
-### 批量生成
-
-**目标:** 一次性生成多个图像变体
-
-1. 使用异步模式快速创建多个任务
-2. 保存所有 taskId
-3. 批量查询并下载
-
-**示例流程:**
-```bash
-# 创建多个任务
-python3 scripts/kie_nano_banana_api.py --prompt "版本1描述" --no-wait
-# 输出: TaskID: task1
-
-python3 scripts/kie_nano_banana_api.py --prompt "版本2描述" --no-wait
-# 输出: TaskID: task2
-
-# 稍后批量下载
-python3 scripts/kie_nano_banana_api.py --query --task-id task1 --download
-python3 scripts/kie_nano_banana_api.py --query --task-id task2 --download
-```
-
-## 快速预设
-
-针对常见使用场景的参数预设:
-
-### 社交媒体
+### 查询任务状态
 
 ```bash
-# Instagram 帖子 (1:1) + 自动下载
 python3 scripts/kie_nano_banana_api.py \
-  --prompt "描述" \
-  --aspect-ratio 1:1 \
-  --resolution 2K \
-  --download
-
-# Instagram 故事 (9:16) + 自动下载
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "描述" \
-  --aspect-ratio 9:16 \
-  --resolution 2K \
+  --query \
+  --task-id "abc123xyz" \
   --download
 ```
 
-### 屏幕壁纸
+**适用场景:**
+- 批量生成多个版本
+- 4K 高清图像(生成时间较长)
+- 后台执行,不阻塞其他操作
 
-```bash
-# 电脑横屏壁纸 (16:9, 4K)
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "描述" \
-  --aspect-ratio 16:9 \
-  --resolution 4K \
-  --download
+---
 
-# 手机竖屏壁纸 (9:16, 2K)
-python3 scripts/kie_nano_banana_api.py \
-  --prompt "描述" \
-  --aspect-ratio 9:16 \
-  --resolution 2K \
-  --download
-```
+## 常见问题快速解决
 
-## 提示词最佳实践
+| 问题 | 解决方案 |
+|-----|---------|
+| 未设置 API 密钥 | `export KIE_API_KEY="your-key"` |
+| 提示词过长 | 精简描述,≤ 20000 字符 |
+| 参考图数量超限 | 最多 8 张 |
+| 等待超时 | 使用 `--max-wait 600` 或 `--no-wait` |
+| 下载失败 | 检查网络,URL 可能已过期 |
 
-### 好的提示词示例
+📖 **详细故障排除**: 参考 TROUBLESHOOTING.md
 
-**详细且具体:**
-```
-"一只橘色的猫咪坐在窗边,温暖的阳光从窗外洒进来,柔和的光影,水彩画风格,高细节"
-```
-
-**包含风格指导:**
-```
-"未来主义城市景观,赛博朋克风格,霓虹灯反射在湿润的街道上,夜景,高细节,专业摄影"
-```
-
-**明确主体和场景:**
-```
-"现代简约风格的咖啡杯,木质桌面,散景背景,温暖的早晨光线,商业产品摄影"
-```
-
-### 避免的提示词
-
-**太简短:**
-```
-❌ "猫"
-✓ "一只可爱的猫咪"
-```
-
-**过于模糊:**
-```
-❌ "一张很好看的图片"
-✓ "宁静的山水风景,日落时分,温暖的色调"
-```
+---
 
 ## 使用技巧
 
-1. **及时下载** - 图像URL有效期有限,生成后立即使用 `--download` 下载
-2. **比例选择** - 根据最终用途选择比例(1:1社交媒体,16:9横屏,9:16竖屏)
-3. **清晰度策略** - 快速预览用1K,最终作品用4K
-4. **批量下载** - 使用异步模式生成多个版本,再批量下载
-5. **自定义目录** - 使用 `--output-dir` 指定项目目录
-6. **JSON自动化** - 使用 `--json` 输出便于脚本处理
+1. **快速迭代**: 先用 1K 测试提示词,满意后生成 4K
+2. **及时下载**: URL 有效期有限,使用 `--download` 立即保存
+3. **批量生成**: 使用 `--no-wait` 异步模式批量提交
+4. **JSON 集成**: 使用 `--json` 便于脚本自动化处理
+5. **自定义目录**: 使用 `--output-dir` 按项目组织文件
 
-## API 信息
+---
 
-- **模型:** nano-banana-pro
-- **平台:** Kie.ai
-- **API 文档:** https://api.kie.ai/docs
-- **获取 API 密钥:** https://kie.ai/api-key
-- **支持:** support@kie.ai
+## 帮助资源
 
-## Resources
+### 文档
 
-### scripts/
+- **EXAMPLES.md** - 18+ 完整输入/输出示例
+- **REFERENCE.md** - 完整参数说明和配置指南
+- **PRESETS.md** - 常见场景快速预设
+- **PROMPT_GUIDE.md** - 提示词撰写最佳实践
+- **TROUBLESHOOTING.md** - 详细错误处理和常见问题
 
-- **kie_nano_banana_api.py**: Nano Banana Pro API 封装脚本,支持文生图、图生图、多图融合和自动下载
-  - 执行: `python3 scripts/kie_nano_banana_api.py [参数]`
-  - 帮助: `python3 scripts/kie_nano_banana_api.py --help`
+### API 信息
 
-### 相关文档
+- **模型**: nano-banana-pro
+- **平台**: Kie.ai
+- **API 文档**: https://api.kie.ai/docs
+- **获取密钥**: https://kie.ai/api-key
 
-- **TEST_OUTPUT_EXAMPLE.md**: 输出示例和下载格式
-- **README.txt**: 快速参考指南
+### 命令行帮助
+
+```bash
+python3 scripts/kie_nano_banana_api.py --help
+```
+
+---
 
 ## 版本信息
 
-- **版本:** v1.1
-- **更新日期:** 2026-02-11
-- **维护者:** storyclaw-skills
+- **版本**: v1.2
+- **更新日期**: 2026-02-11
+- **变更**: 优化工作流,添加反馈循环,实施渐进式文档披露
