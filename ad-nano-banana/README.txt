@@ -17,6 +17,17 @@ claude skills install ad-nano-banana.skill
 ## 快速开始
 
 ### 1. 设置 API 密钥
+
+**推荐方式：使用 .env 文件**
+```bash
+# 复制模板文件
+cp .env.example .env
+
+# 编辑 .env 文件，填入你的 API 密钥
+# KIE_API_KEY=your-api-key-here
+```
+
+**替代方式：环境变量**
 ```bash
 export KIE_API_KEY="your-api-key"
 ```

@@ -20,16 +20,41 @@
 
 **错误信息:**
 ```
-错误: 未设置API密钥。请通过 --api-key 参数或设置环境变量 KIE_API_KEY
+错误: 未设置API密钥
+请使用以下任意一种方式设置:
+  1. 在项目根目录创建 .env 文件，添加: KIE_API_KEY=your-api-key
+  2. 设置环境变量: export KIE_API_KEY=your-api-key
+  3. 使用命令行参数: --api-key your-api-key
 ```
 
 **原因:**
+- 未创建 `.env` 文件或文件中未设置密钥
 - 未设置 `KIE_API_KEY` 环境变量
 - 未使用 `--api-key` 参数
 
 **解决方案:**
 
-**方法 1: 设置环境变量（推荐）**
+**方法 1: 使用 .env 文件（推荐）**
+
+```bash
+# 1. 复制模板文件
+cp .env.example .env
+
+# 2. 编辑 .env 文件
+# 将 KIE_API_KEY=your-api-key-here 改为你的真实密钥
+# 例如: KIE_API_KEY=sk-1234567890abcdef
+
+# 3. 验证 .env 文件位置
+# 应放在 ad-nano-banana 目录下
+```
+
+**优点:**
+- ✅ 密钥存储在本地文件，不会暴露在命令历史中
+- ✅ 脚本自动加载，无需每次手动导出
+- ✅ 适合多个项目独立配置
+- ✅ `.gitignore` 会忽略 `.env`，避免泄漏到 Git 仓库
+
+**方法 2: 设置环境变量**
 
 Bash/Zsh (macOS/Linux):
 ```bash

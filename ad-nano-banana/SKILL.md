@@ -216,7 +216,16 @@ multiSelect: false
 
 ### 1. 环境配置
 
-设置 API 密钥:
+**推荐方式：使用 .env 文件**
+```bash
+# 1. 复制模板文件
+cp .env.example .env
+
+# 2. 编辑 .env 文件，填入你的 API 密钥
+# KIE_API_KEY=your-api-key-here
+```
+
+**替代方式：环境变量**
 ```bash
 export KIE_API_KEY="your-api-key-here"
 ```
@@ -225,6 +234,8 @@ export KIE_API_KEY="your-api-key-here"
 
 验证配置:
 ```bash
+# 如果使用 .env 文件，脚本会自动加载
+# 如果使用环境变量，可以验证：
 echo $KIE_API_KEY  # 应显示你的密钥
 ```
 
