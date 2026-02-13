@@ -12,8 +12,18 @@ import time
 import json
 import argparse
 import requests
+import platform
+import re
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from enum import Enum
+
+# 尝试导入 dotenv，如果不存在则忽略
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 
 
 class SunoModel(str, Enum):
@@ -41,6 +51,110 @@ class TaskStatus(str, Enum):
     GENERATE_AUDIO_FAILED = "GENERATE_AUDIO_FAILED"
     CALLBACK_EXCEPTION = "CALLBACK_EXCEPTION"
     SENSITIVE_WORD_ERROR = "SENSITIVE_WORD_ERROR"
+
+
+def get_download_directory() -> Path:
+    """
+    获取系统下载目录（跨平台支持）
+
+    Returns:
+        Path: 下载目录路径
+    """
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        download_dir = Path.home() / "Downloads"
+    elif system == "Windows":
+        # Windows 下载目录
+        download_dir = Path(os.environ.get('USERPROFILE', Path.home())) / "Downloads"
+    else:  # Linux 和其他 Unix-like 系统
+        # 尝试使用 XDG 标准
+        xdg_download = os.environ.get('XDG_DOWNLOAD_DIR')
+        if xdg_download:
+            download_dir = Path(xdg_download)
+        else:
+            download_dir = Path.home() / "Downloads"
+
+    # 确保目录存在
+    download_dir.mkdir(parents=True, exist_ok=True)
+
+    return download_dir
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    清理文件名，移除非法字符
+
+    Args:
+        filename: 原始文件名
+
+    Returns:
+        str: 清理后的安全文件名
+    """
+    # 移除或替换非法字符
+    # Windows: < > : " / \ | ? *
+    # macOS/Linux: /
+    illegal_chars = r'[<>:"/\\|?*]'
+    safe_name = re.sub(illegal_chars, '-', filename)
+
+    # 移除前后空格
+    safe_name = safe_name.strip()
+
+    # 如果文件名为空或只有非法字符，使用默认名称
+    if not safe_name:
+        safe_name = "music"
+
+    # 限制文件名长度（保留扩展名空间）
+    max_length = 200
+    if len(safe_name) > max_length:
+        safe_name = safe_name[:max_length]
+
+    return safe_name
+
+
+def download_audio(audio_url: str, title: str, download_dir: Optional[Path] = None) -> Path:
+    """
+    下载音频文件到本地
+
+    Args:
+        audio_url: 音频文件 URL
+        title: 音乐标题（用作文件名）
+        download_dir: 下载目录，如果为 None 则使用系统下载目录
+
+    Returns:
+        Path: 下载后的文件路径
+
+    Raises:
+        Exception: 下载失败时抛出异常
+    """
+    if download_dir is None:
+        download_dir = get_download_directory()
+
+    # 清理文件名
+    safe_title = sanitize_filename(title)
+    filename = f"{safe_title}.mp3"
+    file_path = download_dir / filename
+
+    # 如果文件已存在，添加序号
+    counter = 1
+    while file_path.exists():
+        filename = f"{safe_title}_{counter}.mp3"
+        file_path = download_dir / filename
+        counter += 1
+
+    try:
+        print(f"正在下载: {filename}...", file=sys.stderr)
+        response = requests.get(audio_url, timeout=60)
+        response.raise_for_status()
+
+        with open(file_path, 'wb') as f:
+            f.write(response.content)
+
+        print(f"✓ 下载完成: {file_path}", file=sys.stderr)
+        return file_path
+
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"下载失败: {str(e)}")
 
 
 class KieSunoAPI:
@@ -402,19 +516,30 @@ def parse_args():
     parser.add_argument('--json', action='store_true',
                        help='以JSON格式输出结果')
 
+    # 下载参数
+    parser.add_argument('--download', action='store_true',
+                       help='自动下载生成的音频文件到系统下载目录')
+    parser.add_argument('--download-dir', type=str,
+                       help='指定下载目录（默认使用系统下载目录）')
+
     return parser.parse_args()
 
 
-def print_output(audio_list: List[Dict[str, Any]], output_json: bool = False):
+def print_output(audio_list: List[Dict[str, Any]], output_json: bool = False,
+                 enable_download: bool = False, download_dir: Optional[Path] = None):
     """
     输出结果（只输出指定的4个字段）
 
     Args:
         audio_list: 音频信息列表
         output_json: 是否以JSON格式输出
+        enable_download: 是否自动下载音频文件
+        download_dir: 下载目录，如果为 None 则使用系统下载目录
     """
     # 只保留需要的4个字段
     output_data = []
+    downloaded_files = []
+
     for audio in audio_list:
         output_data.append({
             "title": audio.get("title", ""),
@@ -423,8 +548,24 @@ def print_output(audio_list: List[Dict[str, Any]], output_json: bool = False):
             "tags": audio.get("tags", "")
         })
 
+        # 如果启用下载，下载音频文件
+        if enable_download and audio.get("audioUrl"):
+            try:
+                file_path = download_audio(
+                    audio_url=audio["audioUrl"],
+                    title=audio.get("title", "music"),
+                    download_dir=download_dir
+                )
+                downloaded_files.append(str(file_path))
+            except Exception as e:
+                print(f"✗ 下载失败: {e}", file=sys.stderr)
+
     if output_json:
-        # JSON格式输出
+        # JSON格式输出（添加下载路径）
+        if enable_download and downloaded_files:
+            for i, item in enumerate(output_data):
+                if i < len(downloaded_files):
+                    item["localPath"] = downloaded_files[i]
         print(json.dumps(output_data, ensure_ascii=False, indent=2))
     else:
         # 文本格式输出（美化版）
@@ -439,21 +580,50 @@ def print_output(audio_list: List[Dict[str, Any]], output_json: bool = False):
             print(f"下载链接: {item['audioUrl']}")
             print(f"音乐风格: {item['tags']}")
 
+            # 如果有下载文件，显示本地路径
+            if enable_download and i <= len(downloaded_files):
+                print(f"本地路径: {downloaded_files[i-1]}")
+
 
 def main():
     """主函数"""
     args = parse_args()
 
-    # 获取API密钥
+    # 加载 .env 文件（如果存在）
+    if DOTENV_AVAILABLE:
+        # 查找 .env 文件：优先当前目录，然后脚本所在目录
+        env_paths = [
+            Path.cwd() / ".env",  # 当前工作目录
+            Path(__file__).parent.parent / ".env"  # 项目根目录
+        ]
+
+        for env_path in env_paths:
+            if env_path.exists():
+                load_dotenv(env_path)
+                print(f"✓ 已加载配置文件: {env_path}", file=sys.stderr)
+                break
+
+    # 获取API密钥（优先级：命令行 > 环境变量 > .env 文件）
     api_key = args.api_key or os.getenv("KIE_API_KEY")
     if not api_key:
         print("错误: 未设置API密钥", file=sys.stderr)
-        print("请通过 --api-key 参数或环境变量 KIE_API_KEY 设置", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("请使用以下任意一种方式设置:", file=sys.stderr)
+        print("  1. 在项目根目录创建 .env 文件，添加: KIE_API_KEY=your-api-key", file=sys.stderr)
+        print("  2. 设置环境变量: export KIE_API_KEY=your-api-key", file=sys.stderr)
+        print("  3. 使用命令行参数: --api-key your-api-key", file=sys.stderr)
+        print("", file=sys.stderr)
         print("获取API密钥: https://kie.ai/api-key", file=sys.stderr)
         sys.exit(1)
 
     # 初始化客户端
     client = KieSunoAPI(api_key)
+
+    # 处理下载目录
+    download_dir = None
+    if args.download_dir:
+        download_dir = Path(args.download_dir)
+        download_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         # 查询模式
@@ -472,7 +642,7 @@ def main():
             if status == TaskStatus.SUCCESS.value:
                 audio_list = client.extract_audio_urls(result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
-                print_output(audio_list, args.json)
+                print_output(audio_list, args.json, args.download, download_dir)
             else:
                 print(f"任务尚未完成或失败: {status}", file=sys.stderr)
                 if data.get("errorMessage"):
@@ -530,7 +700,7 @@ def main():
                 )
                 audio_list = client.extract_audio_urls(final_result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
-                print_output(audio_list, args.json)
+                print_output(audio_list, args.json, args.download, download_dir)
             else:
                 print(f"任务ID: {task_id}", file=sys.stderr)
                 print(f"可使用以下命令查询: python {sys.argv[0]} --query --task-id {task_id}", file=sys.stderr)
@@ -564,7 +734,7 @@ def main():
                 )
                 audio_list = client.extract_audio_urls(final_result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
-                print_output(audio_list, args.json)
+                print_output(audio_list, args.json, args.download, download_dir)
             else:
                 print(f"任务ID: {task_id}", file=sys.stderr)
                 print(f"可使用以下命令查询: python {sys.argv[0]} --query --task-id {task_id}", file=sys.stderr)
