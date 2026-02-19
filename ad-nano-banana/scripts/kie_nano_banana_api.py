@@ -13,7 +13,6 @@ import time
 import json
 import argparse
 import requests
-import urllib.request
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -254,7 +253,14 @@ def download_images(image_urls: List[str], output_dir: str, output_format: str =
 
             # 下载图像
             print(f"下载图像 {i}/{len(image_urls)}...", file=sys.stderr)
-            urllib.request.urlretrieve(url, filepath)
+            download_headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": url
+            }
+            response = requests.get(url, headers=download_headers, timeout=60)
+            response.raise_for_status()
+            with open(filepath, "wb") as f:
+                f.write(response.content)
             downloaded_files.append(str(filepath))
             print(f"✓ 图像已下载: {filepath}", file=sys.stderr)
 
