@@ -456,7 +456,7 @@ def parse_args():
   python kie_suno_api.py --query --task-id "your_task_id"
 
 环境变量:
-  KIE_API_KEY    kie平台的API密钥（必需）
+  GIGGLE_API_KEY    kie平台的API密钥（必需）
         """
     )
 
@@ -471,7 +471,7 @@ def parse_args():
     parser.add_argument('--prompt', type=str,
                        help='音乐提示词/歌词内容')
     parser.add_argument('--api-key', type=str,
-                       help='API密钥（也可通过环境变量 KIE_API_KEY 设置）')
+                       help='API密钥（也可通过环境变量 GIGGLE_API_KEY 设置）')
     parser.add_argument('--task-id', type=str,
                        help='要查询的任务ID（仅在 --query 模式下使用）')
 
@@ -589,32 +589,38 @@ def main():
     """主函数"""
     args = parse_args()
 
-    # 加载 .env 文件（如果存在）
-    if DOTENV_AVAILABLE:
-        # 查找 .env 文件：当前目录 → 技能目录 → 项目根目录
-        env_paths = [
-            Path.cwd() / ".env",                       # 当前工作目录
-            Path(__file__).parent.parent / ".env",      # 技能根目录
-            Path(__file__).parent.parent.parent / ".env"  # 项目根目录
-        ]
+    # 加载 .env 文件：当前目录 → 技能目录 → 项目根目录
+    env_paths = [
+        Path.cwd() / ".env",
+        Path(__file__).parent.parent / ".env",
+        Path(__file__).parent.parent.parent / ".env",
+    ]
 
-        for env_path in env_paths:
-            if env_path.exists():
+    for env_path in env_paths:
+        if env_path.exists():
+            if DOTENV_AVAILABLE:
                 load_dotenv(env_path)
-                print(f"✓ 已加载配置文件: {env_path}", file=sys.stderr)
-                break
+            else:
+                # 手动解析 .env（python-dotenv 未安装时的 fallback）
+                with open(env_path, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" in line:
+                            key, _, value = line.partition("=")
+                            os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+            break
 
     # 获取API密钥（优先级：命令行 > 环境变量 > .env 文件）
-    api_key = args.api_key or os.getenv("KIE_API_KEY")
+    api_key = args.api_key or os.getenv("GIGGLE_API_KEY")
     if not api_key:
         print("错误: 未设置API密钥", file=sys.stderr)
         print("", file=sys.stderr)
         print("请使用以下任意一种方式设置:", file=sys.stderr)
-        print("  1. 在项目根目录创建 .env 文件，添加: KIE_API_KEY=your-api-key", file=sys.stderr)
-        print("  2. 设置环境变量: export KIE_API_KEY=your-api-key", file=sys.stderr)
+        print("  1. 在项目根目录创建 .env 文件，添加: GIGGLE_API_KEY=your-api-key", file=sys.stderr)
+        print("  2. 设置环境变量: export GIGGLE_API_KEY=your-api-key", file=sys.stderr)
         print("  3. 使用命令行参数: --api-key your-api-key", file=sys.stderr)
-        print("", file=sys.stderr)
-        print("获取API密钥: https://kie.ai/api-key", file=sys.stderr)
         sys.exit(1)
 
     # 初始化客户端

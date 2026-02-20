@@ -390,10 +390,10 @@ python3 scripts/kie_suno_api.py --prompt "描述" --download
 
 ```bash
 # 1. 复制示例文件
-cp .env.example .env
+cp env.example .env
 
 # 2. 编辑 .env 文件，替换为你的 API 密钥
-# KIE_API_KEY=your-api-key-here
+# GIGGLE_API_KEY=your-api-key-here
 
 # 3. 安装 python-dotenv（如果尚未安装）
 pip install python-dotenv
@@ -402,7 +402,7 @@ pip install python-dotenv
 **.env 文件示例：**
 ```env
 # kie.ai API 密钥配置
-KIE_API_KEY=sk_xxxxxxxxxxxxx
+GIGGLE_API_KEY=sk_xxxxxxxxxxxxx
 ```
 
 **优势：**
@@ -416,25 +416,25 @@ KIE_API_KEY=sk_xxxxxxxxxxxxx
 
 ```bash
 # macOS/Linux
-export KIE_API_KEY="your-api-key-here"
+export GIGGLE_API_KEY="your-api-key-here"
 
 # Windows (PowerShell)
-$env:KIE_API_KEY="your-api-key-here"
+$env:GIGGLE_API_KEY="your-api-key-here"
 
 # Windows (CMD)
-set KIE_API_KEY=your-api-key-here
+set GIGGLE_API_KEY=your-api-key-here
 ```
 
 **验证配置：**
 ```bash
 # macOS/Linux
-echo $KIE_API_KEY
+echo $GIGGLE_API_KEY
 
 # Windows (PowerShell)
-echo $env:KIE_API_KEY
+echo $env:GIGGLE_API_KEY
 
 # Windows (CMD)
-echo %KIE_API_KEY%
+echo %GIGGLE_API_KEY%
 ```
 
 ---
@@ -619,8 +619,8 @@ python3 scripts/kie_suno_api.py --prompt "音乐描述" --json --download
 
 **解决方法：**
 ```bash
-export KIE_API_KEY="your-api-key"
-echo $KIE_API_KEY  # 验证
+export GIGGLE_API_KEY="your-api-key"
+echo $GIGGLE_API_KEY  # 验证
 ```
 
 ---

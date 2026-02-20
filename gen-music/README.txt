@@ -17,8 +17,8 @@ claude skills install gen-music.skill
 **方法 1: 使用 .env 文件（推荐）**
 ```bash
 # 复制示例文件并编辑
-cp .env.example .env
-# 编辑 .env，添加: KIE_API_KEY=your-api-key
+cp env.example .env
+# 编辑 .env，添加: GIGGLE_API_KEY=your-api-key
 
 # 安装依赖
 pip install python-dotenv
@@ -27,10 +27,10 @@ pip install python-dotenv
 **方法 2: 设置环境变量**
 ```bash
 # macOS/Linux
-export KIE_API_KEY="your-api-key"
+export GIGGLE_API_KEY="your-api-key"
 
 # Windows (PowerShell)
-$env:KIE_API_KEY="your-api-key"
+$env:GIGGLE_API_KEY="your-api-key"
 ```
 
 ### 2. 生成音乐

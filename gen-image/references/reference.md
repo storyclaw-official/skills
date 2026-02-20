@@ -112,18 +112,18 @@ python3 scripts/kie_nano_banana_api.py --query --task-id abc123 --download
 ## API 密钥配置优先级
 
 ```
-命令行 --api-key  >  环境变量 KIE_API_KEY  >  .env 文件
+命令行 --api-key  >  环境变量 GIGGLE_API_KEY  >  .env 文件
 ```
 
 **推荐方式（.env 文件）:**
 ```bash
-cp .env.example .env
-# 编辑 .env，填入: KIE_API_KEY=your-api-key-here
+cp env.example .env
+# 编辑 .env，填入: GIGGLE_API_KEY=your-api-key-here
 ```
 
 **临时方式（环境变量）:**
 ```bash
-export KIE_API_KEY="your-api-key-here"
+export GIGGLE_API_KEY="your-api-key-here"
 ```
 
 获取密钥: https://kie.ai/api-key

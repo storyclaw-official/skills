@@ -40,7 +40,6 @@ cp env.example .env
 
 ### API Key 获取
 
-- **kie.ai**: https://kie.ai/api-key
 - **giggle.pro**: 参考 giggle-aimv/SKILL.md 中的说明
 
 ### API Key 配置优先级

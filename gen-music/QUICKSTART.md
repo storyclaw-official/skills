@@ -20,7 +20,7 @@
 cd gen-music
 
 # 2. 复制示例文件
-cp .env.example .env
+cp env.example .env
 
 # 3. 编辑 .env 文件，替换为你的 API 密钥
 # 使用你喜欢的编辑器打开 .env
@@ -30,7 +30,7 @@ nano .env  # 或 vim .env 或 code .env
 **编辑内容：**
 ```env
 # kie.ai API 密钥配置
-KIE_API_KEY=sk_xxxxxxxxxxxxx  # 替换为你的真实密钥
+GIGGLE_API_KEY=sk_xxxxxxxxxxxxx  # 替换为你的真实密钥
 ```
 
 ---

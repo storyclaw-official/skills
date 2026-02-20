@@ -7,7 +7,7 @@
 
 ## 📝 更新说明
 
-新增支持从项目目录下的 `.env` 文件读取 `KIE_API_KEY`，简化配置流程。
+新增支持从项目目录下的 `.env` 文件读取 `GIGGLE_API_KEY`，简化配置流程。
 
 ---
 
@@ -34,8 +34,8 @@ API 密钥的读取优先级：
 | 优先级 | 方式 | 说明 |
 |-------|------|------|
 | **1** | 命令行参数 | `--api-key "your-key"` |
-| **2** | 环境变量 | `export KIE_API_KEY="your-key"` |
-| **3** | .env 文件 | `KIE_API_KEY=your-key` |
+| **2** | 环境变量 | `export GIGGLE_API_KEY="your-key"` |
+| **3** | .env 文件 | `GIGGLE_API_KEY=your-key` |
 
 **优先级规则：**
 - 命令行参数 > 环境变量 > .env 文件
@@ -49,12 +49,12 @@ API 密钥的读取优先级：
 
 ```bash
 # 方法 1: 复制示例文件
-cp .env.example .env
+cp env.example .env
 
 # 方法 2: 手动创建
 cat > .env << 'EOF'
 # kie.ai API 密钥配置
-KIE_API_KEY=your-api-key-here
+GIGGLE_API_KEY=your-api-key-here
 EOF
 ```
 
@@ -68,7 +68,7 @@ EOF
 # kie.ai API 密钥配置
 # 获取 API 密钥: https://kie.ai/api-key
 
-KIE_API_KEY=sk_xxxxxxxxxxxxx
+GIGGLE_API_KEY=sk_xxxxxxxxxxxxx
 ```
 
 ---
@@ -109,7 +109,7 @@ python3 scripts/kie_suno_api.py --prompt "一首关于夏天的欢快流行歌"
 ```
 gen-music/
 ├── .env                  # 你的配置文件（不会提交到 Git）
-├── .env.example          # 配置文件模板
+├── env.example          # 配置文件模板
 ├── .gitignore            # Git 忽略文件（已配置 .env）
 ├── requirements.txt      # Python 依赖（新增）
 ├── scripts/
@@ -131,9 +131,9 @@ gen-music/
 ```
 
 **重要提醒：**
-- ✅ 只提交 `.env.example`（不包含真实密钥）
+- ✅ 只提交 `env.example`（不包含真实密钥）
 - ❌ 永远不要提交 `.env` 文件（包含真实密钥）
-- ✅ 分享代码时，只分享 `.env.example`
+- ✅ 分享代码时，只分享 `env.example`
 
 ---
 
@@ -171,7 +171,7 @@ def main():
                 break
 
     # 获取API密钥（优先级：命令行 > 环境变量 > .env 文件）
-    api_key = args.api_key or os.getenv("KIE_API_KEY")
+    api_key = args.api_key or os.getenv("GIGGLE_API_KEY")
 ```
 
 **3. 改进的错误提示**
@@ -181,8 +181,8 @@ if not api_key:
     print("错误: 未设置API密钥", file=sys.stderr)
     print("", file=sys.stderr)
     print("请使用以下任意一种方式设置:", file=sys.stderr)
-    print("  1. 在项目根目录创建 .env 文件，添加: KIE_API_KEY=your-api-key", file=sys.stderr)
-    print("  2. 设置环境变量: export KIE_API_KEY=your-api-key", file=sys.stderr)
+    print("  1. 在项目根目录创建 .env 文件，添加: GIGGLE_API_KEY=your-api-key", file=sys.stderr)
+    print("  2. 设置环境变量: export GIGGLE_API_KEY=your-api-key", file=sys.stderr)
     print("  3. 使用命令行参数: --api-key your-api-key", file=sys.stderr)
 ```
 
@@ -194,7 +194,7 @@ if not api_key:
 
 ```bash
 # 一次性配置
-cp .env.example .env
+cp env.example .env
 # 编辑 .env 添加 API 密钥
 
 # 以后每次运行都无需设置
@@ -212,7 +212,7 @@ python3 scripts/kie_suno_api.py --prompt "描述"
 
 ```bash
 # 每次使用前设置
-export KIE_API_KEY="your-key"
+export GIGGLE_API_KEY="your-key"
 python3 scripts/kie_suno_api.py --prompt "描述"
 ```
 
@@ -227,7 +227,7 @@ python3 scripts/kie_suno_api.py --prompt "描述"
 ```yaml
 # GitHub Actions 示例
 env:
-  KIE_API_KEY: ${{ secrets.KIE_API_KEY }}
+  GIGGLE_API_KEY: ${{ secrets.GIGGLE_API_KEY }}
 
 steps:
   - run: python3 scripts/kie_suno_api.py --prompt "描述"
@@ -309,16 +309,16 @@ git status
 
 ```bash
 # macOS/Linux
-echo $KIE_API_KEY
+echo $GIGGLE_API_KEY
 
 # Windows PowerShell
-echo $env:KIE_API_KEY
+echo $env:GIGGLE_API_KEY
 ```
 
 **步骤 2: 创建 .env 文件**
 
 ```bash
-echo "KIE_API_KEY=$KIE_API_KEY" > .env
+echo "GIGGLE_API_KEY=$GIGGLE_API_KEY" > .env
 ```
 
 **步骤 3: 验证**
@@ -331,7 +331,7 @@ python3 scripts/kie_suno_api.py --prompt "测试"
 **步骤 4: （可选）删除环境变量**
 
 ```bash
-unset KIE_API_KEY  # macOS/Linux
+unset GIGGLE_API_KEY  # macOS/Linux
 ```
 
 ---
@@ -340,7 +340,7 @@ unset KIE_API_KEY  # macOS/Linux
 
 ### 新增文件
 
-- [x] `.env.example` - 配置文件模板
+- [x] `env.example` - 配置文件模板
 - [x] `.gitignore` - Git 忽略文件
 - [x] `requirements.txt` - Python 依赖列表
 - [x] `ENV_FILE_SUPPORT.md` - 本文档

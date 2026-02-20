@@ -7,7 +7,7 @@ description: 使用 Nano Banana Pro 模型(通过 kie.ai 平台)生成 AI 图像
 
 使用 Nano Banana Pro 模型（通过 kie.ai 平台）生成 AI 图像。
 
-**API 密钥**: 从环境变量 `KIE_API_KEY` 或项目根目录 `.env` 文件读取。
+**API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
 ## 执行命令
 
@@ -158,7 +158,7 @@ multiSelect: false
 
 ## 执行前检查
 
-- [ ] `echo $KIE_API_KEY` 或检查 `.env` 文件是否已配置
+- [ ] `echo $GIGGLE_API_KEY` 或检查 `.env` 文件是否已配置
 - [ ] 提示词长度 ≤ 20000 字符
 - [ ] 参考图（如有）URL 可公开访问，数量 ≤ 8
 

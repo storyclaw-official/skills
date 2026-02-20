@@ -23,14 +23,14 @@
 
 **方法 1: .env 文件（推荐）**
 ```bash
-cp .env.example .env
-# 编辑 .env，将 KIE_API_KEY=your-api-key-here 改为真实密钥
+cp env.example .env
+# 编辑 .env，将 GIGGLE_API_KEY=your-api-key-here 改为真实密钥
 ```
 
 **方法 2: 环境变量**
 ```bash
-export KIE_API_KEY="your-api-key-here"
-# 永久设置：echo 'export KIE_API_KEY="your-key"' >> ~/.zshrc
+export GIGGLE_API_KEY="your-api-key-here"
+# 永久设置：echo 'export GIGGLE_API_KEY="your-key"' >> ~/.zshrc
 ```
 
 **方法 3: 命令行参数**
@@ -72,7 +72,7 @@ chmod +x scripts/kie_nano_banana_api.py
 
 API 密钥无效或已过期，重新获取: https://kie.ai/api-key
 
-确保密钥没有多余的空格或换行符：`echo $KIE_API_KEY`
+确保密钥没有多余的空格或换行符：`echo $GIGGLE_API_KEY`
 
 ### 429 Too Many Requests
 

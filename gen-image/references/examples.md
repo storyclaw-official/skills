@@ -215,7 +215,7 @@ python3 scripts/kie_nano_banana_api.py \
 
 ### 示例 14: API 密钥未设置
 
-**解决**: `export KIE_API_KEY="your-key"` 或创建 `.env` 文件
+**解决**: `export GIGGLE_API_KEY="your-key"` 或创建 `.env` 文件
 
 ### 示例 15: 提示词过长
 

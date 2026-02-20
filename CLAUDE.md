@@ -46,8 +46,7 @@ storyclaw-skills 是 Claude Code Skills 技能集合仓库，封装多种 AI 生
 
 | 变量名 | 用途 | 使用技能 |
 |--------|------|---------|
-| `KIE_API_KEY` | kie.ai 平台 API Key | gen-music / gen-image / gen-video |
-| `GIGGLE_API_KEY` | giggle.pro 平台 API Key | giggle-aimv |
+| `GIGGLE_API_KEY` | 所有技能共用的统一 API Key | 全部技能 |
 
 ## 技能目录结构规范
 

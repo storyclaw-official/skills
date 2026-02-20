@@ -3,7 +3,7 @@
 grok-imagine 文生视频调用脚本
 
 使用 kie.ai 的 grok-imagine/text-to-video 模型生成视频。
-从 .env 文件读取 KIE_API_KEY（三级搜索：当前目录 → 技能目录 → 项目根目录）。
+从 .env 文件读取 GIGGLE_API_KEY（三级搜索：当前目录 → 技能目录 → 项目根目录）。
 
 用法:
     python3 text_to_video.py \
@@ -59,9 +59,9 @@ def load_env():
                         os.environ.setdefault(key, value)
             return
 
-    if os.environ.get("KIE_API_KEY"):
+    if os.environ.get("GIGGLE_API_KEY"):
         return
-    print("错误: 未找到 .env 文件且环境变量 KIE_API_KEY 未设置", file=sys.stderr)
+    print("错误: 未找到 .env 文件且环境变量 GIGGLE_API_KEY 未设置", file=sys.stderr)
     print(f"请在项目根目录创建 .env 文件: cp env.example .env", file=sys.stderr)
     sys.exit(1)
 
@@ -159,9 +159,9 @@ def main():
     args = parser.parse_args()
 
     load_env()
-    api_key = os.environ.get("KIE_API_KEY")
+    api_key = os.environ.get("GIGGLE_API_KEY")
     if not api_key:
-        print("错误: 未设置 KIE_API_KEY", file=sys.stderr)
+        print("错误: 未设置 GIGGLE_API_KEY", file=sys.stderr)
         sys.exit(1)
 
     print(f"正在创建文生视频任务...", file=sys.stderr)
