@@ -6,6 +6,7 @@ MV 托管模式 API 调用脚本
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Dict, Any, Optional
@@ -23,12 +24,48 @@ def _check_requests():
         sys.exit(1)
 
 
+def _load_env():
+    """加载 .env 文件（三级搜索路径）"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    skill_dir = os.path.dirname(script_dir)
+    project_dir = os.path.dirname(skill_dir)
+
+    env_paths = [
+        os.path.join(os.getcwd(), ".env"),         # 当前工作目录
+        os.path.join(skill_dir, ".env"),            # 技能根目录
+        os.path.join(project_dir, ".env"),          # 项目根目录
+    ]
+
+    for env_path in env_paths:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        key, _, value = line.partition("=")
+                        key = key.strip()
+                        value = value.strip().strip("\"'")
+                        os.environ.setdefault(key, value)
+            return
+
+
 class MVTrusteeAPI:
     """MV 托管模式 API 客户端"""
 
     def __init__(self):
         requests = _check_requests()
+        _load_env()
         self.base_url = "https://giggle.pro"
+        self.api_key = os.environ.get("GIGGLE_API_KEY")
+        if not self.api_key:
+            print("错误: 未设置 GIGGLE_API_KEY", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("请使用以下任意一种方式设置:", file=sys.stderr)
+            print("  1. 在项目根目录创建 .env 文件，添加: GIGGLE_API_KEY=your-key", file=sys.stderr)
+            print("  2. 设置环境变量: export GIGGLE_API_KEY=your-key", file=sys.stderr)
+            sys.exit(1)
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
 
@@ -42,7 +79,7 @@ class MVTrusteeAPI:
             "mode": "trustee"
         }
         try:
-            headers = {"x-auth": "sk_prod_aW5pdF81NzI4MTA0NzNiNTM2ZjQxMmFhYzM0ZDRkNzE="}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -117,7 +154,7 @@ class MVTrusteeAPI:
             data["music_asset_id"] = music_asset_id
 
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -137,7 +174,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/query"
         params = {"project_id": project_id}
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": self.api_key}
             response = self.session.get(url, params=params, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -157,7 +194,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/pay"
         data = {"project_id": project_id}
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -177,7 +214,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/retry"
         data = {"project_id": project_id, "current_step": current_step}
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()

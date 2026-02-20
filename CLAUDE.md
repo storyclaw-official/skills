@@ -33,6 +33,22 @@ storyclaw-skills 是 Claude Code Skills 技能集合仓库，封装多种 AI 生
 
 `.claude/` 目录已在 `.gitignore` 中忽略，个人配置不会提交到仓库。
 
+## 环境变量文件命名规范
+
+| 文件 | 用途 | 是否提交 git |
+|------|------|-------------|
+| `env.example` | 环境变量示例模板（无点号前缀） | 是 |
+| `.env` | 实际环境变量配置（含敏感信息） | 否（已在 .gitignore） |
+
+根目录 `env.example` 包含所有平台的 API Key 配置，各技能目录的 `env.example` 指向根目录。
+
+### 环境变量一览
+
+| 变量名 | 用途 | 使用技能 |
+|--------|------|---------|
+| `KIE_API_KEY` | kie.ai 平台 API Key | gen-music / gen-image / gen-video |
+| `GIGGLE_API_KEY` | giggle.pro 平台 API Key | giggle-aimv |
+
 ## 技能目录结构规范
 
 每个技能目录必须包含：
@@ -41,7 +57,7 @@ storyclaw-skills 是 Claude Code Skills 技能集合仓库，封装多种 AI 生
 skill-name/
 ├── SKILL.md              # 必须：YAML frontmatter（name + description）+ 交互流程文档
 ├── scripts/              # API 调用 Python 脚本
-├── .env.example          # API Key 配置模板
+├── env.example           # API Key 配置模板（指向根目录 env.example）
 └── references/           # 可选：辅助参考文档
 ```
 
@@ -69,7 +85,15 @@ description: 中文描述，包含触发场景和关键词
 
 ### API Key 配置三级优先级
 
-命令行参数 `--api-key` > 环境变量 `KIE_API_KEY` > `.env` 文件
+命令行参数 `--api-key` > 环境变量 > `.env` 文件
+
+### .env 文件搜索路径
+
+所有脚本统一使用三级搜索路径加载 `.env` 文件：
+
+1. 当前工作目录 `./.env`
+2. 技能根目录 `<skill-dir>/.env`
+3. 项目根目录 `<skill-dir>/../.env`（推荐）
 
 ### 视频技能路由架构
 
@@ -93,5 +117,5 @@ description: 中文描述，包含触发场景和关键词
 1. 创建技能目录，命名使用 kebab-case
 2. 编写 SKILL.md（含 YAML frontmatter）
 3. 在 `scripts/` 下编写 API 封装脚本
-4. 创建 `.env.example` 配置模板
+4. 创建 `env.example` 配置模板（指向根目录）
 5. 如果是视频类技能，在 `giggle-video/SKILL.md` 路由表中注册

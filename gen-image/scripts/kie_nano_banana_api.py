@@ -398,10 +398,11 @@ def main():
 
     # 加载 .env 文件（如果存在）
     if DOTENV_AVAILABLE:
-        # 查找 .env 文件：优先当前目录，然后脚本所在目录
+        # 查找 .env 文件：当前目录 → 技能目录 → 项目根目录
         env_paths = [
-            Path.cwd() / ".env",  # 当前工作目录
-            Path(__file__).parent.parent / ".env"  # 项目根目录
+            Path.cwd() / ".env",                       # 当前工作目录
+            Path(__file__).parent.parent / ".env",      # 技能根目录
+            Path(__file__).parent.parent.parent / ".env"  # 项目根目录
         ]
 
         for env_path in env_paths:

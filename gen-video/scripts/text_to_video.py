@@ -3,7 +3,7 @@
 grok-imagine 文生视频调用脚本
 
 使用 kie.ai 的 grok-imagine/text-to-video 模型生成视频。
-从技能目录的 .env 文件读取 KIE_API_KEY。
+从 .env 文件读取 KIE_API_KEY（三级搜索：当前目录 → 技能目录 → 项目根目录）。
 
 用法:
     python3 text_to_video.py \
@@ -35,25 +35,34 @@ def get_skill_dir():
 
 
 def load_env():
-    """从技能目录中查找并加载 .env 文件"""
+    """从三级路径查找并加载 .env 文件"""
     skill_dir = get_skill_dir()
-    env_path = os.path.join(skill_dir, ".env")
-    if os.path.exists(env_path):
-        with open(env_path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, _, value = line.partition("=")
-                    key = key.strip()
-                    value = value.strip().strip("\"'")
-                    os.environ.setdefault(key, value)
-        return
+    project_dir = os.path.dirname(skill_dir)
+
+    env_paths = [
+        os.path.join(os.getcwd(), ".env"),      # 当前工作目录
+        os.path.join(skill_dir, ".env"),         # 技能根目录
+        os.path.join(project_dir, ".env"),       # 项目根目录
+    ]
+
+    for env_path in env_paths:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        key, _, value = line.partition("=")
+                        key = key.strip()
+                        value = value.strip().strip("\"'")
+                        os.environ.setdefault(key, value)
+            return
+
     if os.environ.get("KIE_API_KEY"):
         return
     print("错误: 未找到 .env 文件且环境变量 KIE_API_KEY 未设置", file=sys.stderr)
-    print(f"请在技能目录创建 .env 文件: {env_path}", file=sys.stderr)
+    print(f"请在项目根目录创建 .env 文件: cp env.example .env", file=sys.stderr)
     sys.exit(1)
 
 
