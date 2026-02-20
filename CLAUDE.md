@@ -14,6 +14,25 @@ storyclaw-skills 是 Claude Code Skills 技能集合仓库，封装多种 AI 生
 - **API 平台**: kie.ai（Suno、Nano Banana、Grok-Imagine）、giggle.pro（MV 托管）
 - **技能格式**: SKILL.md（YAML frontmatter + Markdown）
 
+## 技能命名前缀规范
+
+- **`giggle-`**: giggle.pro 组合工作流（AI导演），涉及多步编排
+- **`gen-`**: 原子生成能力，单一 API 调用完成
+
+新增技能时必须遵循此前缀规则。
+
+## Claude Code 配置层级
+
+| 文件 | 作用 | 是否提交 git |
+|------|------|-------------|
+| `./CLAUDE.md` | 团队共享的项目配置（本文件） | 是 |
+| `./.claude/CLAUDE.md` | 个人项目配置（API Key 备忘、本地调试习惯等） | 否 |
+| `~/.claude/CLAUDE.md` | 个人全局配置（所有项目通用偏好） | 否 |
+
+优先级: `.claude/CLAUDE.md` > `CLAUDE.md` > `~/.claude/CLAUDE.md`
+
+`.claude/` 目录已在 `.gitignore` 中忽略，个人配置不会提交到仓库。
+
 ## 技能目录结构规范
 
 每个技能目录必须包含：
