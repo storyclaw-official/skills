@@ -1,7 +1,7 @@
-# ad-generating-ai-music 技能
+# gen-music 技能
 
 ## 安装
-claude skills install ad-generating-ai-music.skill
+claude skills install gen-music.skill
 
 ## 核心功能
 ✅ title      - 音乐标题

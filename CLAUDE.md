@@ -39,12 +39,12 @@ description: 中文描述，包含触发场景和关键词
 
 | 技能目录 | 功能 | API 服务 | 核心脚本 |
 |---------|------|---------|---------|
-| `ad-generating-ai-music` | AI 音乐生成 | kie.ai / Suno V5 | `scripts/kie_suno_api.py` |
-| `ad-nano-banana` | AI 图像生成 | kie.ai / Nano Banana Pro | `scripts/kie_nano_banana_api.py` |
-| `generate-mv` | MV 生成 | giggle.pro 托管模式 | `scripts/trustee_api.py` |
-| `generating-scripts` | 姜文风格剧本生成 | 纯 LLM（无外部 API） | 无脚本 |
-| `generating-videos` | 视频生成路由入口 | 路由至具体模型 | 无脚本 |
-| `generating-videos-with-grok-imagine` | Grok-Imagine 视频生成 | kie.ai / grok-imagine | `text_to_video.py`, `image_to_video.py` |
+| `giggle-aimv` | MV 生成 | giggle.pro 托管模式 | `scripts/trustee_api.py` |
+| `giggle-aiwriter` | 姜文风格剧本生成 | 纯 LLM（无外部 API） | 无脚本 |
+| `giggle-video` | 视频生成路由入口 | 路由至具体模型 | 无脚本 |
+| `gen-music` | AI 音乐生成 | kie.ai / Suno V5 | `scripts/kie_suno_api.py` |
+| `gen-image` | AI 图像生成 | kie.ai / Nano Banana Pro | `scripts/kie_nano_banana_api.py` |
+| `gen-video` | Grok-Imagine 视频生成 | kie.ai / grok-imagine | `text_to_video.py`, `image_to_video.py` |
 
 ## 架构要点
 
@@ -54,7 +54,7 @@ description: 中文描述，包含触发场景和关键词
 
 ### 视频技能路由架构
 
-`generating-videos` 是统一入口路由，根据模型类型分发到具体实现目录（如 `generating-videos-with-grok-imagine`）。添加新视频模型只需：创建模型目录 + 在路由 SKILL.md 注册表中添加一行。
+`giggle-video` 是统一入口路由，根据模型类型分发到具体实现目录（如 `gen-video`）。添加新视频模型只需：创建模型目录 + 在路由 SKILL.md 注册表中添加一行。
 
 ### Python 脚本规范
 
@@ -75,4 +75,4 @@ description: 中文描述，包含触发场景和关键词
 2. 编写 SKILL.md（含 YAML frontmatter）
 3. 在 `scripts/` 下编写 API 封装脚本
 4. 创建 `.env.example` 配置模板
-5. 如果是视频类技能，在 `generating-videos/SKILL.md` 路由表中注册
+5. 如果是视频类技能，在 `giggle-video/SKILL.md` 路由表中注册

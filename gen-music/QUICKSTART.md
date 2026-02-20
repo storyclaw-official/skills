@@ -17,7 +17,7 @@
 
 ```bash
 # 1. 进入项目目录
-cd ad-generating-ai-music
+cd gen-music
 
 # 2. 复制示例文件
 cp .env.example .env
@@ -143,7 +143,7 @@ python3 scripts/kie_suno_api.py --prompt "描述" --json
    ```
 
 2. .env 文件不在正确位置
-   - 应该在项目根目录：`ad-generating-ai-music/.env`
+   - 应该在项目根目录：`gen-music/.env`
    - 或当前工作目录
 
 ---

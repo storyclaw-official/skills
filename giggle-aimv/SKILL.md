@@ -1,5 +1,5 @@
 ---
-name: generate-mv
+name: giggle-aimv
 description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词/上传音乐生成视频等需求时使用。支持三种音乐生成模式（提示词、自定义、上传），调用 MV 托管 API 完成完整工作流。
 ---
 

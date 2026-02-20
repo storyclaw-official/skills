@@ -1,5 +1,5 @@
 ---
-name: generating-videos-with-grok-imagine
+name: gen-video
 description: 使用 grok-imagine 模型生成视频。支持文生视频和图生视频。当用户指定使用 grok-imagine、grok 模型生成视频时使用此技能。
 ---
 
@@ -69,7 +69,7 @@ API Key 获取地址：https://kie.ai/api-key
 #### 执行脚本
 
 ```bash
-python3 generating-videos-with-grok-imagine/scripts/text_to_video.py \
+python3 gen-video/scripts/text_to_video.py \
     --prompt "用户的提示词" \
     --aspect_ratio "16:9" \
     --duration "6" \
@@ -117,7 +117,7 @@ python3 generating-videos-with-grok-imagine/scripts/text_to_video.py \
 #### 执行脚本
 
 ```bash
-python3 generating-videos-with-grok-imagine/scripts/image_to_video.py \
+python3 gen-video/scripts/image_to_video.py \
     --image "/path/to/image.png" \
     --prompt "视频动作描述" \
     --duration "6" \

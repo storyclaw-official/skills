@@ -17,12 +17,12 @@
 
 脚本现在会自动查找并加载 `.env` 文件，优先级顺序：
 
-1. **当前工作目录** - `./env`
-2. **项目根目录** - `/path/to/ad-generating-ai-music/.env`
+1. **当前工作目录** - `./.env`
+2. **项目根目录** - `/path/to/gen-music/.env`
 
 **加载成功提示：**
 ```
-✓ 已加载配置文件: /path/to/ad-generating-ai-music/.env
+✓ 已加载配置文件: /path/to/gen-music/.env
 ```
 
 ---
@@ -96,7 +96,7 @@ python3 scripts/kie_suno_api.py --prompt "一首关于夏天的欢快流行歌"
 
 **输出示例：**
 ```
-✓ 已加载配置文件: /path/to/ad-generating-ai-music/.env
+✓ 已加载配置文件: /path/to/gen-music/.env
 使用简化模式生成音乐...
 ✓ 任务创建成功! TaskID: abc123xyz
 ...
@@ -107,7 +107,7 @@ python3 scripts/kie_suno_api.py --prompt "一首关于夏天的欢快流行歌"
 ## 📁 文件结构
 
 ```
-ad-generating-ai-music/
+gen-music/
 ├── .env                  # 你的配置文件（不会提交到 Git）
 ├── .env.example          # 配置文件模板
 ├── .gitignore            # Git 忽略文件（已配置 .env）
@@ -269,7 +269,7 @@ python3 scripts/kie_suno_api.py --prompt "描述"
 **答：** 两个位置都可以（优先级从高到低）：
 
 1. **当前工作目录** - 运行脚本时所在的目录
-2. **项目根目录** - `ad-generating-ai-music/.env`
+2. **项目根目录** - `gen-music/.env`
 
 **推荐：** 放在项目根目录
 

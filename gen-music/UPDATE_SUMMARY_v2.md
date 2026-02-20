@@ -1,4 +1,4 @@
-# ad-generating-ai-music Skill 优化总结 v2.0
+# gen-music Skill 优化总结 v2.0
 
 **更新日期**: 2026-02-13
 **版本**: v1.2 → v2.0
@@ -340,7 +340,7 @@ Claude: [自动下载] "✓ 已保存到 ~/Downloads/Summer_Vibes.mp3"
 
 ### 参考资料
 - [Anthropic Skill 最佳实践](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
-- [ad-nano-banana skill](../ad-nano-banana/SKILL.md) - 渐进式披露参考
+- [gen-image skill](../gen-image/SKILL.md) - 渐进式披露参考
 
 ### 下一步改进方向
 1. 添加批量下载功能
