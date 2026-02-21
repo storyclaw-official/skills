@@ -417,7 +417,9 @@ class TrusteeModeAPI:
         paid = False  # 标记是否已支付，避免重复支付
         max_retries = 5  # 最大重试次数
         retry_delay = 5  # 重试延迟（秒）
-        
+        last_logged_step = ""  # 上次打印的步骤，避免重复日志
+        last_logged_status = ""
+
         while True:
             # 检查超时
             if datetime.now() - start_time > timeout:
@@ -574,7 +576,11 @@ class TrusteeModeAPI:
                 download_url = video_asset.get("download_url") if video_asset else None
                 
                 if video_asset and download_url:
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务完成！视频下载链接: {download_url}", file=sys.stderr)
+                    signed_url = video_asset.get("signed_url", "")
+                    thumbnail_url = video_asset.get("thumbnail_url", "")
+                    duration = video_asset.get("duration", 0)
+                    shot_count = data.get("shot_count", 0)
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务完成！时长: {duration}s | 分镜数: {shot_count}", file=sys.stderr)
 
                     # 自动下载视频到本地
                     local_path = self.download_video(download_url, project_name)
@@ -585,7 +591,11 @@ class TrusteeModeAPI:
                         "uuid": query_result.get("uuid", ""),
                         "data": {
                             "project_id": project_id,
-                            "download_url": download_url,
+                            "signed_url": signed_url,      # 在线播放链接（浏览器直接播放）
+                            "download_url": download_url,  # 下载链接（带 attachment 参数）
+                            "thumbnail_url": thumbnail_url,
+                            "duration": duration,
+                            "shot_count": shot_count,
                             "local_path": local_path,
                             "video_asset": video_asset,
                             "status": status
@@ -595,9 +605,12 @@ class TrusteeModeAPI:
                     # 已完成但还没有下载链接，继续等待
                     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务状态为完成，但尚未生成下载链接，继续等待...", file=sys.stderr)
             
-            # 输出当前状态
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 当前状态: {status}, 当前步骤: {current_step}, 支付状态: {pay_status}", file=sys.stderr)
-            
+            # 仅在状态或步骤发生变化时打印，避免每3秒一条重复日志
+            if status != last_logged_status or current_step != last_logged_step:
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 状态: {status} | 步骤: {current_step} | 支付: {pay_status}", file=sys.stderr)
+                last_logged_status = status
+                last_logged_step = current_step
+
             # 等待后继续查询
             time.sleep(query_interval)
 

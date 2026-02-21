@@ -293,6 +293,8 @@ class MVTrusteeAPI:
         paid = False
         max_retries = 5
         retry_delay = 5
+        last_logged_step = ""
+        last_logged_status = ""
 
         while True:
             if datetime.now() - start_time > timeout:
@@ -370,15 +372,30 @@ class MVTrusteeAPI:
             video_asset = data.get("video_asset", {})
             download_url = video_asset.get("download_url") if video_asset else None
             if video_asset and download_url:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 任务完成: {download_url}", file=sys.stderr)
+                signed_url = video_asset.get("signed_url", "")
+                thumbnail_url = video_asset.get("thumbnail_url", "")
+                duration = video_asset.get("duration", 0)
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 任务完成！时长: {duration}s", file=sys.stderr)
                 return {
                     "code": 200,
                     "msg": "success",
                     "uuid": query_result.get("uuid", ""),
-                    "data": {"project_id": project_id, "download_url": download_url, "video_asset": video_asset, "status": "completed"},
+                    "data": {
+                        "project_id": project_id,
+                        "signed_url": signed_url,      # 在线播放链接
+                        "download_url": download_url,  # 下载链接
+                        "thumbnail_url": thumbnail_url,
+                        "duration": duration,
+                        "video_asset": video_asset,
+                        "status": "completed"
+                    },
                 }
 
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 状态: {status}, 步骤: {current_step}, 支付状态: {pay_status}", file=sys.stderr)
+            # 仅在状态或步骤变化时打印，避免重复日志
+            if status != last_logged_status or current_step != last_logged_step:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 状态: {status} | 步骤: {current_step} | 支付: {pay_status}", file=sys.stderr)
+                last_logged_status = status
+                last_logged_step = current_step
             time.sleep(query_interval)
 
 

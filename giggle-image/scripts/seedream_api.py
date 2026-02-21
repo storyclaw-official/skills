@@ -207,13 +207,17 @@ class SeedreamAPI:
             完成后的任务详情
         """
         start_time = time.time()
+        last_logged_status = ""
 
         while time.time() - start_time < max_wait_time:
             result = self.query_task(task_id)
             data = result.get("data", {})
             status = data.get("status", "")
 
-            print(f"任务状态: {status}", file=sys.stderr)
+            # 仅在状态变化时打印，避免重复日志
+            if status != last_logged_status:
+                print(f"任务状态: {status}", file=sys.stderr)
+                last_logged_status = status
 
             if status == TaskStatus.COMPLETED.value:
                 print("✓ 任务完成!", file=sys.stderr)
@@ -238,6 +242,15 @@ class SeedreamAPI:
         """
         data = task_result.get("data", {})
         return data.get("urls", [])
+
+
+def to_view_url(url: str) -> str:
+    """将下载 URL 转换为在线查看 URL（去掉 response-content-disposition=attachment 参数）"""
+    # 去掉 &response-content-disposition=attachment（参数在中间或末尾均兼容）
+    url = url.replace("&response-content-disposition=attachment", "")
+    url = url.replace("?response-content-disposition=attachment&", "?")
+    url = url.replace("?response-content-disposition=attachment", "")
+    return url
 
 
 def download_images(image_urls: List[str], output_dir: str) -> List[str]:
@@ -375,15 +388,18 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False, 
     输出结果
 
     Args:
-        image_urls: 图像URL列表
+        image_urls: 图像URL列表（原始下载URL）
         prompt: 原始提示词
         output_json: 是否以JSON格式输出
         downloaded_files: 下载的文件路径列表
     """
+    view_urls = [to_view_url(u) for u in image_urls]
+
     if output_json:
         output_data = {
             "prompt": prompt,
-            "urls": image_urls,
+            "urls": image_urls,        # 原始下载 URL（带 response-content-disposition=attachment）
+            "view_urls": view_urls,    # 在线查看 URL（浏览器直接显示图像）
             "imageCount": len(image_urls)
         }
         if downloaded_files:
@@ -397,8 +413,9 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False, 
         print(f"提示词: {prompt}")
         print(f"生成数量: {len(image_urls)} 张")
         print()
-        for i, url in enumerate(image_urls, 1):
-            print(f"图像 #{i}: {url}")
+        for i, (view_url, dl_url) in enumerate(zip(view_urls, image_urls), 1):
+            print(f"图像 #{i} 在线查看: {view_url}")
+            print(f"图像 #{i} 下载链接: {dl_url}")
 
         if downloaded_files:
             print()

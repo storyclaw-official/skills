@@ -140,7 +140,11 @@ result = api.execute_workflow(
     "uuid": "...",
     "data": {
         "project_id": "...",
-        "download_url": "https://...",
+        "signed_url": "https://...",     // 在线播放链接（优先使用）
+        "download_url": "https://...",   // 下载链接（带 attachment 参数）
+        "thumbnail_url": "https://...",  // 封面缩略图
+        "duration": 16.28,               // 视频时长（秒）
+        "shot_count": 4,                 // 分镜数量
         "local_path": "/Users/xxx/Downloads/giggle-videos/项目名称_20260206_220000.mp4",
         "video_asset": {...},
         "status": "completed"
@@ -159,19 +163,19 @@ result = api.execute_workflow(
 
 ## 🎯 重要：如何向用户展示结果
 
-**当视频生成成功后，你必须向用户清晰展示视频 URL：**
+**当视频生成成功后，必须向用户展示以下信息：**
 
 ```
 ✅ 视频生成成功！
 
-🎬 视频链接：https://...（从 result["data"]["download_url"] 获取）
+▶️ 在线播放：https://...（从 result["data"]["signed_url"] 获取）
+⬇️ 下载链接：https://...（从 result["data"]["download_url"] 获取）
 📁 本地路径：/path/to/video.mp4
-
-您可以点击上面的链接在线观看或下载视频。
+⏱️ 时长：16.28s | 🎬 分镜数：4
 ```
 
 **关键要求：**
-1. **必须提取并展示 `result["data"]["download_url"]`**
-2. **使用清晰的标识（如 🎬）突出显示视频链接**
-3. **告诉用户可以点击链接观看或下载**
-4. **不要只展示本地路径，视频 URL 才是用户最需要的**
+1. **优先展示 `result["data"]["signed_url"]`（在线播放，浏览器直接打开可播放）**
+2. **同时展示 `result["data"]["download_url"]`（点击直接下载）**
+3. **展示时长和分镜数，让用户了解生成结果**
+4. **不要只展示本地路径，URL 才是用户最需要的**

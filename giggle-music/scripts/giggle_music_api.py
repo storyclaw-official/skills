@@ -126,13 +126,17 @@ class GiggleMusicAPI:
     ) -> Dict[str, Any]:
         """轮询等待任务完成"""
         start_time = time.time()
+        last_logged_status = ""
 
         while time.time() - start_time < max_wait_time:
             result = self.query_task(task_id)
             data = result.get("data", {})
             status = data.get("status")
 
-            print(f"任务状态: {status}", file=sys.stderr)
+            # 仅在状态变化时打印，避免重复日志
+            if status != last_logged_status:
+                print(f"任务状态: {status}", file=sys.stderr)
+                last_logged_status = status
 
             if status == TaskStatus.COMPLETED.value:
                 print("✓ 任务完成!", file=sys.stderr)
@@ -152,9 +156,12 @@ class GiggleMusicAPI:
 
         audio_list = []
         for i, url in enumerate(urls, 1):
+            # 去掉 response-content-disposition=attachment，生成在线收听链接
+            view_url = url.replace("&response-content-disposition=attachment", "")
             audio_list.append({
-                "audioUrl": url,
                 "title": f"music_{i}",
+                "audioUrl": view_url,    # 在线收听链接（浏览器直接播放）
+                "downloadUrl": url,      # 下载链接（带 attachment 参数）
             })
 
         return audio_list

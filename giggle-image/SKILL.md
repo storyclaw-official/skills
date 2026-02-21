@@ -13,7 +13,7 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 ## 执行命令
 
-始终使用 `--json` 获取结构化输出，从 `urls` 中提取完整链接返回给用户。
+始终使用 `--json` 获取结构化输出，从 `view_urls` 提取在线查看链接展示给用户，`urls` 为下载链接备用。
 
 ```bash
 # 文生图（基础）
@@ -52,14 +52,16 @@ python3 scripts/seedream_api.py \
 | 字段 | 类型 | 说明 |
 |-----|------|------|
 | `prompt` | string | 图像描述提示词 |
-| `urls` | string[] | 生成的图像完整下载链接数组 |
+| `view_urls` | string[] | 在线查看链接（浏览器直接显示图像，用于展示） |
+| `urls` | string[] | 原始下载链接（带 attachment 参数，用于下载） |
 | `imageCount` | integer | 生成的图像数量 |
 
-**展示方式**：脚本完成后，对每个 URL 执行：
+**展示方式**：脚本完成后，优先使用 `view_urls`，同时附上 `urls` 作为下载入口：
 
 ```markdown
-![生成图像](https://url-from-urls)
-🔗 完整链接：https://url-from-urls
+![生成图像 #N](https://view_url)
+🔗 在线查看：https://view_url
+⬇️ 下载链接：https://download_url
 ```
 
 如果用户明确要求保存到本地，追加 `--download` 参数重新运行，或单独运行下载命令。
@@ -128,11 +130,12 @@ multiSelect: false
 ### 步骤 4: 执行生成并展示
 
 1. 运行命令（带 `--json`），等待完成
-2. 解析输出中的 `urls` 数组
+2. 解析输出中的 `view_urls`（在线查看）和 `urls`（下载）数组
 3. 对每张图像，在会话中输出：
    ```
-   ![生成图像 #N](url)
-   🔗 完整链接：url
+   ![生成图像 #N](view_url)
+   🔗 在线查看：view_url
+   ⬇️ 下载链接：download_url
    ```
 4. 无需询问是否下载，直接展示即可
 
