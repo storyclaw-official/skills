@@ -1,4 +1,4 @@
-# ad-generating-ai-music 依赖包
+# giggle-music 依赖包
 
 # HTTP 请求
 requests>=2.31.0

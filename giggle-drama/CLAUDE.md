@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **ad-drama** project - a video generation tool that interfaces with the Giggle.pro Trustee Mode V2 API. It provides both a Python API client and a Claude Code skill for generating AI videos from story prompts.
+This is the **giggle-drama** project - a video generation tool that interfaces with the Giggle.pro Trustee Mode V2 API. It provides both a Python API client and a Claude Code skill for generating AI videos from story prompts.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ This is the **ad-drama** project - a video generation tool that interfaces with 
   - CLI interface with subcommands: `create`, `submit`, `query`, `pay`, `styles`, `workflow`
 
 - **`SKILL.md`**: Claude Code skill definition for video generation
-  - Skill name: `generating-videos`
+  - Skill name: `giggle-drama`
   - Enables natural language video generation requests in Claude Code sessions
 
 ### API Workflow
@@ -69,7 +69,7 @@ python scripts/trustee_api.py query --project-id <ID> --poll --interval 3
 
 ### Using the Claude Code Skill
 
-When invoked via `/generating-videos` or similar prompts, the skill will:
+When invoked via `/giggle-drama` or similar prompts, the skill will:
 1. Ask for story content, aspect ratio, and optional style/duration
 2. Call `execute_workflow()` which handles everything automatically
 3. Return the video download URL upon completion

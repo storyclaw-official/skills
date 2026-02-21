@@ -1,4 +1,4 @@
-# ad-generating-ai-music
+# giggle-music
 
 使用 giggle.pro 平台生成 AI 音乐。
 

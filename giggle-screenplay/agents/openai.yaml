@@ -1,4 +1,4 @@
 interface:
   display_name: "Generating Scripts"
   short_description: "按姜文式叙事对白机制生成完整梗概人物分场与对白剧本内容"
-  default_prompt: "请使用 $generating-scripts，按“题材/时代/主角目标/人物关系/输出模式（快速版|标准版|长篇版）”为我生成剧本。"
+  default_prompt: “请使用 $giggle-screenplay，按”题材/时代/主角目标/人物关系/输出模式（快速版|标准版|长篇版）”为我生成剧本。”

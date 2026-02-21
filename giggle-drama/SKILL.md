@@ -1,5 +1,5 @@
 ---
-name: ad-drama
+name: giggle-drama
 description: 用户在有生成视频需求、生成短视频需求、有一个创意需要生成视频、或查看可用风格时使用此skill，可以引导用户查看风格。
 user-invocable: true
 metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎬","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt","cp {baseDir}/.env.example {baseDir}/.env","echo 'Please edit .env and add your GIGGLE_API_KEY'"]},"version":"1.0.0","author":"姜式伙伴"}
