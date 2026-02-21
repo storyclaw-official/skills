@@ -6,10 +6,33 @@ MV 托管模式 API 调用脚本
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
+
+# 从 .env 文件或环境变量读取 API Key
+def _load_api_key() -> str:
+    key = os.environ.get("GIGGLE_API_KEY", "")
+    if not key:
+        # 向上查找 .env 文件
+        cur = os.path.dirname(os.path.abspath(__file__))
+        for _ in range(4):
+            env_path = os.path.join(cur, ".env")
+            if os.path.exists(env_path):
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("GIGGLE_API_KEY="):
+                            key = line.split("=", 1)[1].strip()
+                            break
+                if key:
+                    break
+            cur = os.path.dirname(cur)
+    return key
+
+_API_KEY = _load_api_key()
 
 
 def _check_requests():
@@ -42,7 +65,7 @@ class MVTrusteeAPI:
             "mode": "trustee"
         }
         try:
-            headers = {"x-auth": ""}
+            headers = {"x-auth": _API_KEY}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -117,7 +140,7 @@ class MVTrusteeAPI:
             data["music_asset_id"] = music_asset_id
 
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": _API_KEY}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -137,7 +160,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/query"
         params = {"project_id": project_id}
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": _API_KEY}
             response = self.session.get(url, params=params, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -157,7 +180,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/pay"
         data = {"project_id": project_id}
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": _API_KEY}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -177,7 +200,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/retry"
         data = {"project_id": project_id, "current_step": current_step}
         try:
-            headers = {"x-auth": "111"}
+            headers = {"x-auth": _API_KEY}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
