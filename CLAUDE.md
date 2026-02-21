@@ -23,6 +23,7 @@ Claude Code / OpenClaw Agent 技能集合，每个技能目录是独立的 Skill
 ```
 <skill-name>/
 ├── SKILL.md          # Skill 定义：frontmatter + Agent 执行指令
+├── env.example       # 独立部署时的环境变量参考（无 API Key 的技能无此文件）
 └── scripts/          # Python API 客户端（直接可执行）
 ```
 
@@ -60,12 +61,20 @@ metadata: {"openclaw": {"requires": {"env": ["API_KEY"], "bins": ["python3"]}, .
 
 ## 环境配置
 
+### API Key 管理策略
+
+**统一配置（推荐）**：根目录一个 `.env`，所有技能共用，python-dotenv 自动向上查找。
+
 ```bash
 cp env.example .env
 # 编辑 .env 填入：
 # GIGGLE_API_KEY=...   （giggle-* 技能）
 # KIE_API_KEY=...      （kie-* 技能）
 ```
+
+**OpenClaw 部署**：用户在 `~/.openclaw/openclaw.json` 配置一次即可，技能通过 `SKILL.md` 的 `metadata.openclaw.requires.env` 声明所需变量，OpenClaw 运行时自动注入。无需在技能目录放 `.env`。
+
+**独立使用单个技能**：参考该技能目录下的 `env.example`（各技能独立模板，非隐藏文件），复制到根目录 `.env` 后填入对应 Key。
 
 依赖安装（各技能独立）：
 ```bash

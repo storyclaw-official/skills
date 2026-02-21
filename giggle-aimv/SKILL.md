@@ -1,6 +1,8 @@
 ---
 name: giggle-aimv
 description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词/上传音乐生成视频等需求时使用。支持三种音乐生成模式（提示词、自定义、上传），调用 MV 托管 API 完成完整工作流。
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎵","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
 # MV 托管模式 API Skill

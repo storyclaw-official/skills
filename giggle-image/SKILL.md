@@ -1,6 +1,8 @@
 ---
 name: giggle-image
 description: 使用 Seedream 模型（通过 giggle.pro 平台）生成 AI 图像。支持文生图、图生图和多图融合（最多 10 张）。当用户需要创建、生成图像或图片、使用即梦/seedream 模型生成图像时使用此技能。支持场景：(1) 根据文本描述生成图像，(2) 使用参考图生成图像，(3) 多图融合创意生成，(4) 自定义图像比例和生成数量。触发关键词：即梦、seedream、Seedream、seedream45。
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🖼️","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
 # Generating Images With Seedream

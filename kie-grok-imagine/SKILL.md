@@ -1,6 +1,8 @@
 ---
 name: kie-grok-imagine
 description: 使用 grok-imagine 模型生成视频。支持文生视频和图生视频。当用户指定使用 grok-imagine、grok 模型生成视频时使用此技能。
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["KIE_API_KEY"],"bins":["python3"]},"primaryEnv":"KIE_API_KEY","emoji":"🎥","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
 # grok-imagine 视频生成

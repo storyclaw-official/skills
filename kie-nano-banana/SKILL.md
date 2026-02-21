@@ -1,6 +1,8 @@
 ---
 name: kie-nano-banana
 description: 使用 Nano Banana Pro 模型(通过 kie.ai 平台)生成 AI 图像。支持文生图、图生图和多图融合(最多 8 张)。当用户需要创建、生成图像或图片时使用此技能。支持场景：(1) 根据文本描述生成图像，(2) 使用参考图生成图像，(3) 多图融合创意生成，(4) 自定义图像比例和清晰度。触发关键词：生成图像、创建图片、画一张图、AI 作画、图像生成、图片创作、nano-banana。
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["KIE_API_KEY"],"bins":["python3"]},"primaryEnv":"KIE_API_KEY","emoji":"🎨","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
 # Kie Nano Banana
