@@ -42,7 +42,7 @@ class MVTrusteeAPI:
             "mode": "trustee"
         }
         try:
-            headers = {"x-auth": "sk_prod_aW5pdF81NzI4MTA0NzNiNTM2ZjQxMmFhYzM0ZDRkNzE="}
+            headers = {"x-auth": ""}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
