@@ -53,7 +53,7 @@ cp env.example .env
 
 # 方法 2: 手动创建
 cat > .env << 'EOF'
-# kie.ai API 密钥配置
+# giggle.pro API 密钥配置
 GIGGLE_API_KEY=your-api-key-here
 EOF
 ```
@@ -65,8 +65,8 @@ EOF
 将 `your-api-key-here` 替换为你的真实 API 密钥：
 
 ```env
-# kie.ai API 密钥配置
-# 获取 API 密钥: https://kie.ai/api-key
+# giggle.pro API 密钥配置
+# 获取 API 密钥: https://giggle.pro/api-key
 
 GIGGLE_API_KEY=sk_xxxxxxxxxxxxx
 ```

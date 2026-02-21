@@ -2,7 +2,7 @@
 """
 grok-imagine 图生视频调用脚本
 
-使用 kie.ai 的 grok-imagine/image-to-video 模型生成视频。
+使用 giggle.pro 的 grok-imagine/image-to-video 模型生成视频。
 支持本地图片（自动上传）和远程图片 URL。
 从 .env 文件读取 GIGGLE_API_KEY（三级搜索：当前目录 → 技能目录 → 项目根目录）。
 
@@ -117,8 +117,8 @@ def upload_image(api_key: str, image_path: str) -> str:
             "Authorization": f"Bearer {api_key}",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
-            "Origin": "https://kie.ai",
-            "Referer": "https://kie.ai/",
+            "Origin": "https://giggle.pro",
+            "Referer": "https://giggle.pro/",
         },
         method="POST",
     )
@@ -144,7 +144,7 @@ def upload_image(api_key: str, image_path: str) -> str:
 
 def create_task(api_key: str, image_url: str, prompt: str, duration: str, resolution: str) -> str:
     """创建图生视频任务，返回 taskId"""
-    url = "https://api.kie.ai/api/v1/jobs/createTask"
+    url = "https://giggle.pro/api/v1/jobs/createTask"
     payload = {
         "model": "grok-imagine/image-to-video",
         "input": {
@@ -183,7 +183,7 @@ def create_task(api_key: str, image_url: str, prompt: str, duration: str, resolu
 
 def poll_task(api_key: str, task_id: str, poll_interval: int = 10, max_wait: int = 600) -> dict:
     """轮询任务状态直到完成或超时"""
-    url = f"https://api.kie.ai/api/v1/jobs/recordInfo?taskId={task_id}"
+    url = f"https://giggle.pro/api/v1/jobs/recordInfo?taskId={task_id}"
     req = urllib.request.Request(
         url,
         headers={"Authorization": f"Bearer {api_key}"},

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# gen-image 入口脚本
+# 兼容 --output / --size 等常见 CLI 惯例，内部转为 kie_nano_banana_api.py 参数
+#
+# 用法：
+#   ./generate-image "提示词" [--output /path/to/file.png] [--size 1024x1024]
+#   ./generate-image --prompt "提示词" [--aspect-ratio 16:9] [--resolution 2K] [--download]
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY_SCRIPT="$SCRIPT_DIR/scripts/kie_nano_banana_api.py"
+
+PROMPT=""
+OUTPUT=""
+OUTPUT_DIR="$HOME/clawd"
+SIZE=""
+ASPECT_RATIO=""
+RESOLUTION="2K"
+DOWNLOAD=false
+EXTRA_ARGS=()
+
+# 解析参数
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prompt)
+            PROMPT="$2"; shift 2 ;;
+        --output)
+            OUTPUT="$2"; shift 2 ;;
+        --output-dir)
+            OUTPUT_DIR="$2"; DOWNLOAD=true; shift 2 ;;
+        --size)
+            SIZE="$2"; shift 2 ;;
+        --aspect-ratio)
+            ASPECT_RATIO="$2"; shift 2 ;;
+        --resolution)
+            RESOLUTION="$2"; shift 2 ;;
+        --download)
+            DOWNLOAD=true; shift ;;
+        --image-input)
+            EXTRA_ARGS+=("--image-input" "$2"); shift 2 ;;
+        --output-format)
+            EXTRA_ARGS+=("--output-format" "$2"); shift 2 ;;
+        --no-wait)
+            EXTRA_ARGS+=("--no-wait"); shift ;;
+        --max-wait)
+            EXTRA_ARGS+=("--max-wait" "$2"); shift 2 ;;
+        -*)
+            # 其他参数直接透传
+            EXTRA_ARGS+=("$1"); shift ;;
+        *)
+            # 位置参数作为 prompt
+            if [[ -z "$PROMPT" ]]; then
+                PROMPT="$1"
+            fi
+            shift ;;
+    esac
+done
+
+# --output 指定了具体文件路径：提取目录，启用下载
+if [[ -n "$OUTPUT" ]]; then
+    OUTPUT_DIR="$(dirname "$OUTPUT")"
+    DOWNLOAD=true
+    mkdir -p "$OUTPUT_DIR"
+fi
+
+# --size WxH → --aspect-ratio（近似换算）
+if [[ -n "$SIZE" && -z "$ASPECT_RATIO" ]]; then
+    W="${SIZE%%x*}"
+    H="${SIZE##*x}"
+    if [[ -n "$W" && -n "$H" && "$W" -gt 0 && "$H" -gt 0 ]]; then
+        if [[ "$W" -gt "$H" ]]; then
+            ASPECT_RATIO="16:9"
+        elif [[ "$W" -lt "$H" ]]; then
+            ASPECT_RATIO="9:16"
+        else
+            ASPECT_RATIO="1:1"
+        fi
+    fi
+fi
+
+# 默认比例
+if [[ -z "$ASPECT_RATIO" ]]; then
+    ASPECT_RATIO="1:1"
+fi
+
+if [[ -z "$PROMPT" ]]; then
+    echo "用法: ./generate-image \"提示词\" [--output /path/file.png] [--size 1024x1024]" >&2
+    echo "      ./generate-image --prompt \"提示词\" [--aspect-ratio 1:1] [--resolution 2K]" >&2
+    exit 1
+fi
+
+# 构建命令
+CMD=(python3 "$PY_SCRIPT"
+    --prompt "$PROMPT"
+    --aspect-ratio "$ASPECT_RATIO"
+    --resolution "$RESOLUTION"
+    --json
+)
+
+if $DOWNLOAD; then
+    CMD+=(--download --output-dir "$OUTPUT_DIR")
+fi
+
+CMD+=("${EXTRA_ARGS[@]}")
+
+exec "${CMD[@]}"

@@ -1,11 +1,11 @@
 ---
 name: gen-music
-description: 使用 Suno API（通过 kie.ai 平台）生成 AI 音乐。当用户需要创建、生成或创作音乐时使用此技能。支持场景：(1) 根据文本描述生成音乐，(2) 创作带歌词的歌曲，(3) 生成纯音乐/背景音乐，(4) 自定义音乐风格、人声性别和创意程度。触发关键词：生成音乐、创作歌曲、写歌、创建音乐、AI 作曲、音乐创作。
+description: 使用 Suno API（通过 giggle.pro 平台）生成 AI 音乐。当用户需要创建、生成或创作音乐时使用此技能。支持场景：(1) 根据文本描述生成音乐，(2) 创作带歌词的歌曲，(3) 生成纯音乐/背景音乐，(4) 自定义音乐风格、人声性别和创意程度。触发关键词：生成音乐、创作歌曲、写歌、创建音乐、AI 作曲、音乐创作。
 ---
 
 # AD Generating AI Music
 
-使用 Suno API（通过 kie.ai 平台）生成 AI 音乐。支持从简单的文本描述到精确控制的自定义创作。
+使用 Suno API（通过 giggle.pro 平台）生成 AI 音乐。支持从简单的文本描述到精确控制的自定义创作。
 
 ## 核心输出
 
@@ -87,6 +87,12 @@ multiSelect: false
 - "适合工作的舒缓背景音乐"
 - "欢快的夏日流行歌曲"
 
+**依赖检查（首次使用时自动安装）：**
+```bash
+python3 -c "import requests" 2>/dev/null || python3 -m pip install requests --quiet
+python3 -c "import dotenv" 2>/dev/null || python3 -m pip install python-dotenv --quiet
+```
+
 **执行命令：**
 ```bash
 python3 scripts/kie_suno_api.py --prompt "用户描述"
@@ -101,7 +107,7 @@ python3 scripts/kie_suno_api.py --prompt "用户描述"
 歌词:
 一首关于夏天的欢快流行歌
 
-下载链接: https://cdn.kie.ai/audio/xxx.mp3
+下载链接: https://assets.giggle.pro/audio/xxx.mp3
 音乐风格: pop, upbeat, summer
 ```
 
@@ -198,7 +204,7 @@ python3 scripts/kie_suno_api.py --prompt "用户描述" --instrumental
 一首关于夏天的欢快流行歌
 
 🔗 下载链接 (audioUrl):
-https://cdn.kie.ai/audio/xxx-1.mp3
+https://assets.giggle.pro/audio/xxx-1.mp3
 
 🎵 音乐风格 (tags): pop, upbeat, summer
 
@@ -211,7 +217,7 @@ https://cdn.kie.ai/audio/xxx-1.mp3
 一首关于夏天的欢快流行歌
 
 🔗 下载链接 (audioUrl):
-https://cdn.kie.ai/audio/xxx-2.mp3
+https://assets.giggle.pro/audio/xxx-2.mp3
 
 🎵 音乐风格 (tags): pop, upbeat, summer
 
@@ -267,8 +273,8 @@ def sanitize_filename(filename):
 
 # 3. 下载所有音乐（假设从脚本输出中解析了音乐列表）
 music_list = [
-    {"title": "Summer Vibes", "audioUrl": "https://cdn.kie.ai/audio/xxx-1.mp3"},
-    {"title": "Summer Vibes", "audioUrl": "https://cdn.kie.ai/audio/xxx-2.mp3"}
+    {"title": "Summer Vibes", "audioUrl": "https://assets.giggle.pro/audio/xxx-1.mp3"},
+    {"title": "Summer Vibes", "audioUrl": "https://assets.giggle.pro/audio/xxx-2.mp3"}
 ]
 
 for index, music in enumerate(music_list, start=1):
@@ -382,7 +388,7 @@ python3 scripts/kie_suno_api.py --prompt "描述" --download
 
 ### 1. 环境配置
 
-**获取 API 密钥：** https://kie.ai/api-key
+**获取 API 密钥：** https://giggle.pro/api-key
 
 **设置 API 密钥（推荐使用方法 1）：**
 
@@ -401,7 +407,7 @@ pip install python-dotenv
 
 **.env 文件示例：**
 ```env
-# kie.ai API 密钥配置
+# giggle.pro API 密钥配置
 GIGGLE_API_KEY=sk_xxxxxxxxxxxxx
 ```
 
@@ -585,7 +591,7 @@ python3 scripts/kie_suno_api.py --prompt "音乐描述" --json
   {
     "title": "音乐标题",
     "prompt": "生成提示词",
-    "audioUrl": "https://cdn.kie.ai/audio/xxx.mp3",
+    "audioUrl": "https://assets.giggle.pro/audio/xxx.mp3",
     "tags": "pop, upbeat"
   }
 ]
@@ -602,7 +608,7 @@ python3 scripts/kie_suno_api.py --prompt "音乐描述" --json --download
   {
     "title": "音乐标题",
     "prompt": "生成提示词",
-    "audioUrl": "https://cdn.kie.ai/audio/xxx.mp3",
+    "audioUrl": "https://assets.giggle.pro/audio/xxx.mp3",
     "tags": "pop, upbeat",
     "localPath": "/Users/username/Downloads/音乐标题.mp3"
   }

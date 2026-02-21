@@ -126,7 +126,7 @@ cp env.example .env
 export GIGGLE_API_KEY="your-api-key-here"
 ```
 
-获取密钥: https://kie.ai/api-key
+获取密钥: https://giggle.pro/api-key
 
 ---
 

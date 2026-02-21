@@ -2,7 +2,7 @@
 """
 grok-imagine 文生视频调用脚本
 
-使用 kie.ai 的 grok-imagine/text-to-video 模型生成视频。
+使用 giggle.pro 的 grok-imagine/text-to-video 模型生成视频。
 从 .env 文件读取 GIGGLE_API_KEY（三级搜索：当前目录 → 技能目录 → 项目根目录）。
 
 用法:
@@ -68,7 +68,7 @@ def load_env():
 
 def create_task(api_key: str, prompt: str, aspect_ratio: str, duration: str, resolution: str) -> str:
     """创建文生视频任务，返回 taskId"""
-    url = "https://api.kie.ai/api/v1/jobs/createTask"
+    url = "https://giggle.pro/api/v1/jobs/createTask"
     payload = {
         "model": "grok-imagine/text-to-video",
         "input": {
@@ -107,7 +107,7 @@ def create_task(api_key: str, prompt: str, aspect_ratio: str, duration: str, res
 
 def poll_task(api_key: str, task_id: str, poll_interval: int = 10, max_wait: int = 600) -> dict:
     """轮询任务状态直到完成或超时"""
-    url = f"https://api.kie.ai/api/v1/jobs/recordInfo?taskId={task_id}"
+    url = f"https://giggle.pro/api/v1/jobs/recordInfo?taskId={task_id}"
     req = urllib.request.Request(
         url,
         headers={"Authorization": f"Bearer {api_key}"},

@@ -9,7 +9,7 @@
 
 ### 步骤 1: 获取 API 密钥
 
-访问 https://kie.ai/api-key 获取你的 API 密钥
+访问 https://giggle.pro/api-key 获取你的 API 密钥
 
 ---
 
@@ -29,7 +29,7 @@ nano .env  # 或 vim .env 或 code .env
 
 **编辑内容：**
 ```env
-# kie.ai API 密钥配置
+# giggle.pro API 密钥配置
 GIGGLE_API_KEY=sk_xxxxxxxxxxxxx  # 替换为你的真实密钥
 ```
 
@@ -74,7 +74,7 @@ python3 scripts/kie_suno_api.py --prompt "一首关于夏天的欢快流行歌"
 歌词:
 一首关于夏天的欢快流行歌
 
-下载链接: https://cdn.kie.ai/audio/xxx-1.mp3
+下载链接: https://assets.giggle.pro/audio/xxx-1.mp3
 音乐风格: pop, upbeat, summer
 ```
 

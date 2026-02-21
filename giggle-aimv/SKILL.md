@@ -7,6 +7,12 @@ description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词
 
 此 skill 用于调用 MV 托管模式 API，执行完整的 MV 生成工作流：创建项目 → 提交任务 → 查询进度 → 支付 → 等待完成。
 
+## 依赖检查（首次使用时自动安装）
+
+```bash
+python3 -c "import requests" 2>/dev/null || python3 -m pip install requests --quiet
+```
+
 ## 三种音乐生成模式
 
 | 模式 | music_generate_type | 必需参数 | 说明 |

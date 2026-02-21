@@ -11,7 +11,7 @@ storyclaw-skills 是 Claude Code Skills 技能集合仓库，封装多种 AI 生
 - **语言**: Python 3
 - **HTTP**: requests 库
 - **环境变量**: python-dotenv（可选）
-- **API 平台**: kie.ai（Suno、Nano Banana、Grok-Imagine）、giggle.pro（MV 托管）
+- **API 平台**: giggle.pro（Suno、Nano Banana、Grok-Imagine、MV 托管）
 - **技能格式**: SKILL.md（YAML frontmatter + Markdown）
 
 ## 技能命名前缀规范
@@ -76,9 +76,9 @@ description: 中文描述，包含触发场景和关键词
 | `giggle-aimv` | MV 生成 | giggle.pro 托管模式 | `scripts/trustee_api.py` |
 | `giggle-aiwriter` | 姜文风格剧本生成 | 纯 LLM（无外部 API） | 无脚本 |
 | `giggle-video` | 视频生成路由入口 | 路由至具体模型 | 无脚本 |
-| `gen-music` | AI 音乐生成 | kie.ai / Suno V5 | `scripts/kie_suno_api.py` |
-| `gen-image` | AI 图像生成 | kie.ai / Nano Banana Pro | `scripts/kie_nano_banana_api.py` |
-| `gen-video` | Grok-Imagine 视频生成 | kie.ai / grok-imagine | `text_to_video.py`, `image_to_video.py` |
+| `gen-music` | AI 音乐生成 | giggle.pro / Suno V5 | `scripts/kie_suno_api.py` |
+| `gen-image` | AI 图像生成 | giggle.pro / Nano Banana Pro | `scripts/kie_nano_banana_api.py` |
+| `gen-video` | Grok-Imagine 视频生成 | giggle.pro / grok-imagine | `text_to_video.py`, `image_to_video.py` |
 
 ## 架构要点
 

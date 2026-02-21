@@ -55,7 +55,7 @@ from pathlib import Path
 import re
 
 # 1. 从脚本输出中获取 audioUrl 和 title
-audio_url = "https://cdn.kie.ai/audio/xxx-1.mp3"  # 已返回的链接
+audio_url = "https://assets.giggle.pro/audio/xxx-1.mp3"  # 已返回的链接
 title = "Summer Vibes"  # 已返回的标题
 
 # 2. 清理文件名
@@ -163,7 +163,7 @@ Claude:
 ============================================================
 📝 音乐标题: Summer Vibes
 📄 歌词: 一首关于夏天的欢快流行歌
-🔗 下载链接: https://cdn.kie.ai/audio/xxx-1.mp3
+🔗 下载链接: https://assets.giggle.pro/audio/xxx-1.mp3
 🎵 音乐风格: pop, upbeat, summer
 
 ============================================================
@@ -171,7 +171,7 @@ Claude:
 ============================================================
 📝 音乐标题: Summer Vibes
 📄 歌词: 一首关于夏天的欢快流行歌
-🔗 下载链接: https://cdn.kie.ai/audio/xxx-2.mp3
+🔗 下载链接: https://assets.giggle.pro/audio/xxx-2.mp3
 🎵 音乐风格: pop, upbeat, summer
 
 是否将音乐文件下载到本地？
@@ -265,8 +265,8 @@ def download_music(music_list):
 
 # 使用示例
 music_list = [
-    {"title": "Summer Vibes", "audioUrl": "https://cdn.kie.ai/audio/xxx-1.mp3"},
-    {"title": "Summer Vibes", "audioUrl": "https://cdn.kie.ai/audio/xxx-2.mp3"}
+    {"title": "Summer Vibes", "audioUrl": "https://assets.giggle.pro/audio/xxx-1.mp3"},
+    {"title": "Summer Vibes", "audioUrl": "https://assets.giggle.pro/audio/xxx-2.mp3"}
 ]
 
 download_music(music_list)

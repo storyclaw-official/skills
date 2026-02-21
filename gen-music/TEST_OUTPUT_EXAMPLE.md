@@ -26,7 +26,7 @@ python3 scripts/kie_suno_api.py --prompt "一首欢快的流行歌曲"
 歌词:
 一首欢快的流行歌曲
 
-下载链接: https://cdn.kie.ai/audio/xxx-1.mp3
+下载链接: https://assets.giggle.pro/audio/xxx-1.mp3
 音乐风格: pop, upbeat, energetic
 
 ============================================================
@@ -36,7 +36,7 @@ python3 scripts/kie_suno_api.py --prompt "一首欢快的流行歌曲"
 歌词:
 一首欢快的流行歌曲
 
-下载链接: https://cdn.kie.ai/audio/xxx-2.mp3
+下载链接: https://assets.giggle.pro/audio/xxx-2.mp3
 音乐风格: pop, cheerful, dance
 ```
 
@@ -71,7 +71,7 @@ python3 scripts/kie_suno_api.py --custom \
 快乐的节奏在跳动
 让我们一起歌唱
 
-下载链接: https://cdn.kie.ai/audio/xxx.mp3
+下载链接: https://assets.giggle.pro/audio/xxx.mp3
 音乐风格: pop, lyrical, female vocals, summer vibes
 ```
 
@@ -156,13 +156,13 @@ python3 scripts/kie_suno_api.py --prompt "一首欢快的流行歌曲" --json
   {
     "title": "Summer Joy",
     "prompt": "一首欢快的流行歌曲",
-    "audioUrl": "https://cdn.kie.ai/audio/xxx-1.mp3",
+    "audioUrl": "https://assets.giggle.pro/audio/xxx-1.mp3",
     "tags": "pop, upbeat, energetic"
   },
   {
     "title": "Happy Vibes",
     "prompt": "一首欢快的流行歌曲",
-    "audioUrl": "https://cdn.kie.ai/audio/xxx-2.mp3",
+    "audioUrl": "https://assets.giggle.pro/audio/xxx-2.mp3",
     "tags": "pop, cheerful, dance"
   }
 ]
@@ -176,7 +176,7 @@ python3 scripts/kie_suno_api.py --prompt "一首欢快的流行歌曲" --json
 |---------|-----------|------|------|
 | **音乐标题** | `title` | 歌曲名称（AI 自动生成） | "关于迟到的勇气" |
 | **歌词** | `prompt` | 完整歌词（保留格式和换行） | "[Verse 1]\n歌词内容..." |
-| **下载链接** | `audioUrl` | MP3 音频文件下载地址 | "https://cdn.kie.ai/..." |
+| **下载链接** | `audioUrl` | MP3 音频文件下载地址 | "https://assets.giggle.pro/..." |
 | **音乐风格** | `tags` | 音乐风格描述和标签 | "Mid-tempo Mandopop duet..." |
 
 ---
@@ -252,10 +252,10 @@ jq -r '.[].prompt' output.json
 ### 下载音频文件
 ```bash
 # 使用 curl 下载
-curl -o music.mp3 "https://cdn.kie.ai/audio/xxx.mp3"
+curl -o music.mp3 "https://assets.giggle.pro/audio/xxx.mp3"
 
 # 使用 wget 下载
-wget -O music.mp3 "https://cdn.kie.ai/audio/xxx.mp3"
+wget -O music.mp3 "https://assets.giggle.pro/audio/xxx.mp3"
 ```
 
 ---

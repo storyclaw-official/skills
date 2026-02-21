@@ -49,7 +49,7 @@
 {
   "title": "Summer Vibes",
   "prompt": "一首关于夏天的欢快流行歌",
-  "audioUrl": "https://cdn.kie.ai/audio/xxx.mp3",
+  "audioUrl": "https://assets.giggle.pro/audio/xxx.mp3",
   "tags": "pop, upbeat, summer",
   "localPath": "/Users/username/Downloads/Summer_Vibes.mp3"  // 新增
 }

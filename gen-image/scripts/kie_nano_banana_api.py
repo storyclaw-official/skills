@@ -64,7 +64,7 @@ class TaskState(str, Enum):
 class KieNanoBananaAPI:
     """Kie 平台 Nano Banana Pro API 客户端"""
 
-    BASE_URL = "https://api.kie.ai"
+    BASE_URL = "https://giggle.pro"
     CREATE_TASK_ENDPOINT = "/api/v1/jobs/createTask"
     QUERY_TASK_ENDPOINT = "/api/v1/jobs/recordInfo"
     MODEL_NAME = "nano-banana-pro"

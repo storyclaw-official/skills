@@ -38,7 +38,7 @@ export GIGGLE_API_KEY="your-api-key-here"
 python3 scripts/kie_nano_banana_api.py --prompt "描述" --api-key "your-key"
 ```
 
-获取密钥: https://kie.ai/api-key
+获取密钥: https://giggle.pro/api-key
 
 ---
 
@@ -70,7 +70,7 @@ chmod +x scripts/kie_nano_banana_api.py
 
 ### 401 Unauthorized
 
-API 密钥无效或已过期，重新获取: https://kie.ai/api-key
+API 密钥无效或已过期，重新获取: https://giggle.pro/api-key
 
 确保密钥没有多余的空格或换行符：`echo $GIGGLE_API_KEY`
 
@@ -85,7 +85,7 @@ python3 scripts/kie_nano_banana_api.py --prompt "描述" --poll-interval 10
 ### 网络连接错误
 
 ```
-ConnectionError: Failed to connect to api.kie.ai
+ConnectionError: Failed to connect to giggle.pro
 ```
 
 检查网络连接，如需代理：

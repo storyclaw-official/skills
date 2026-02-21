@@ -160,7 +160,7 @@ def download_audio(audio_url: str, title: str, download_dir: Optional[Path] = No
 class KieSunoAPI:
     """kie平台 Suno API 封装类"""
 
-    BASE_URL = "https://api.kie.ai"
+    BASE_URL = "https://giggle.pro"
     GENERATE_ENDPOINT = "/api/v1/generate"
     QUERY_ENDPOINT = "/api/v1/generate/record-info"
 
