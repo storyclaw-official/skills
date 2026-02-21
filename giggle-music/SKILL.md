@@ -1,9 +1,9 @@
 ---
-name: ad-generating-ai-music
+name: giggle-music
 description: 使用 giggle.pro 平台生成 AI 音乐。当用户需要创建、生成或创作音乐时使用此技能。支持根据文本描述生成音乐、创作带歌词的歌曲、生成纯音乐/背景音乐、自定义音乐风格和人声性别。触发关键词：生成音乐、创作歌曲、写歌、AI 作曲、音乐创作。
 ---
 
-# AD Generating AI Music
+# Giggle Music
 
 通过 giggle.pro 平台生成 AI 音乐，支持简化模式和自定义模式。
 

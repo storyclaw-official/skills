@@ -1,4 +1,4 @@
-# 🎬 AD-Drama - AI视频生成Skill
+# 🎬 giggle-drama - AI视频生成Skill
 
 「姜式伙伴」AI 导演 - 智能视频创作助手
 
@@ -27,12 +27,12 @@
 
 1. 将此文件夹复制到 `~/.claude/skills/` 目录：
    ```bash
-   cp -r ad-drama ~/.claude/skills/
+   cp -r giggle-drama ~/.claude/skills/
    ```
 
 2. 安装Python依赖：
    ```bash
-   cd ~/.claude/skills/ad-drama
+   cd ~/.claude/skills/giggle-drama
    pip3 install -r scripts/requirements.txt
    ```
 
@@ -64,7 +64,7 @@ cp .env.example .env
 
 调用skill：
 ```
-/ad-drama
+/giggle-drama
 ```
 
 然后按提示输入信息，或直接描述需求：
@@ -145,7 +145,7 @@ pip3 install -r scripts/requirements.txt
 ### 项目结构
 
 ```
-ad-drama/
+giggle-drama/
 ├── README.md               # 说明文档
 ├── SKILL.md               # Skill定义（AgentSkills标准）
 ├── CLAUDE.md              # Claude Code项目文档
