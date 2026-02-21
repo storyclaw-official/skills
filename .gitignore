@@ -1,3 +1,6 @@
+# 本地 Claude 配置（个人，不提交）
+.claude/
+
 # 忽略打包文件
 *.skill
 *.zip
