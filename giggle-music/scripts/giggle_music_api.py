@@ -167,6 +167,34 @@ class GiggleMusicAPI:
         return audio_list
 
 
+def _get_music_log_dir() -> Path:
+    """获取 giggle-music 日志目录"""
+    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-music' / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir
+
+
+def _setup_music_log(task_id: str) -> Path:
+    """创建任务日志文件，返回路径"""
+    from datetime import datetime as _dt
+    log_dir = _get_music_log_dir()
+    log_file = log_dir / f"{task_id}_{_dt.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_file.touch()
+    return log_file
+
+
+def _check_music_sent(task_id: str) -> bool:
+    """检查是否已推送过结果（.sent 防重复）"""
+    sent_file = _get_music_log_dir() / f"{task_id}.sent"
+    return sent_file.exists()
+
+
+def _mark_music_sent(task_id: str) -> None:
+    """标记已推送结果"""
+    sent_file = _get_music_log_dir() / f"{task_id}.sent"
+    sent_file.touch()
+
+
 def load_api_key() -> str:
     """从 .env 文件加载 API 密钥"""
     if DOTENV_AVAILABLE:
@@ -272,14 +300,26 @@ def main():
             print(f"任务状态: {status}", file=sys.stderr)
 
             if status == TaskStatus.COMPLETED.value:
+                # 防重复：检查 .sent 文件
+                if _check_music_sent(args.task_id):
+                    print(json.dumps({"status": "already_sent", "task_id": args.task_id}, ensure_ascii=False))
+                    sys.exit(0)
                 audio_list = client.extract_audio_urls(result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
+                # 标记已推送
+                _mark_music_sent(args.task_id)
                 print_output(audio_list, args.json)
-            else:
-                print(f"任务尚未完成或失败: {status}", file=sys.stderr)
+                sys.exit(0)
+            elif status == TaskStatus.FAILED.value:
+                print(f"任务失败: {status}", file=sys.stderr)
                 if data.get("err_msg"):
                     print(f"错误信息: {data.get('err_msg')}", file=sys.stderr)
                 sys.exit(1)
+            else:
+                # processing / pending → exit(2)，cron 据此判断仍在进行中
+                print(f"任务进行中: {status}", file=sys.stderr)
+                print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
+                sys.exit(2)
 
         # 自定义模式
         elif args.custom:
@@ -319,8 +359,9 @@ def main():
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
                 print_output(audio_list, args.json)
             else:
-                print(f"任务ID: {task_id}", file=sys.stderr)
-                print(f"可使用以下命令查询: python {sys.argv[0]} --query --task-id {task_id}", file=sys.stderr)
+                # 输出到 stdout，exec 可读取 task_id
+                log_file = _setup_music_log(task_id)
+                print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
 
         # 简化模式（默认）
         else:
@@ -349,8 +390,9 @@ def main():
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
                 print_output(audio_list, args.json)
             else:
-                print(f"任务ID: {task_id}", file=sys.stderr)
-                print(f"可使用以下命令查询: python {sys.argv[0]} --query --task-id {task_id}", file=sys.stderr)
+                # 输出到 stdout，exec 可读取 task_id
+                log_file = _setup_music_log(task_id)
+                print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
 
     except Exception as e:
         print(f"✗ 错误: {e}", file=sys.stderr)

@@ -69,7 +69,30 @@ class TrusteeModeAPI:
         except ImportError:
             print("警告: 未安装 python-dotenv 库", file=sys.stderr)
             print("请运行: pip install python-dotenv", file=sys.stderr)
-    
+
+    def _get_log_dir(self) -> Path:
+        """获取日志目录路径"""
+        log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-drama' / 'logs'
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return log_dir
+
+    def _setup_log(self, project_id: str) -> Path:
+        """创建日志文件，返回路径"""
+        log_dir = self._get_log_dir()
+        log_file = log_dir / f"{project_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_file.touch()
+        return log_file
+
+    def _check_sent(self, project_id: str) -> bool:
+        """检查是否已推送过结果（.sent 防重复）"""
+        sent_file = self._get_log_dir() / f"{project_id}.sent"
+        return sent_file.exists()
+
+    def _mark_sent(self, project_id: str) -> None:
+        """标记已推送结果"""
+        sent_file = self._get_log_dir() / f"{project_id}.sent"
+        sent_file.touch()
+
     def create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
         创建项目
@@ -272,6 +295,81 @@ class TrusteeModeAPI:
         except Exception as e:
             print(f"请求失败: {e}")
             return {"code": -1, "msg": str(e)}
+
+    def create_and_submit(self, diy_story: str, aspect: str, project_name: str,
+                         video_duration: str = "auto", style_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Phase 1：快速创建项目并提交任务（< 10秒完成）
+        stdout 输出：{"status": "started", "project_id": "xxx", "log_file": "..."}
+        """
+        language = "zh"
+        project_type = "director"
+
+        # 步骤1：创建项目
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 创建项目...", file=sys.stderr)
+        create_result = self.create_project(
+            name=project_name,
+            project_type=project_type,
+            aspect=aspect,
+            mode="trustee"
+        )
+
+        code = create_result.get("code")
+        if isinstance(code, str):
+            code = int(code) if code.isdigit() else 0
+
+        if code != 0 and code != 200:
+            return {
+                "code": code,
+                "msg": f"创建项目失败: {create_result.get('msg', '未知错误')}",
+                "data": None
+            }
+
+        project_id = create_result.get("data", {}).get("project_id")
+        if not project_id:
+            return {
+                "code": -1,
+                "msg": "创建项目失败: 未获取到项目ID",
+                "data": None
+            }
+
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 项目创建成功，ID: {project_id}", file=sys.stderr)
+
+        # 步骤2：提交任务
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 提交任务...", file=sys.stderr)
+        submit_result = self.submit_task(
+            project_id=project_id,
+            diy_story=diy_story,
+            aspect=aspect,
+            video_duration=video_duration,
+            language=language,
+            style_id=style_id
+        )
+
+        code = submit_result.get("code")
+        if isinstance(code, str):
+            code = int(code) if code.isdigit() else 0
+
+        if code != 0 and code != 200:
+            return {
+                "code": code,
+                "msg": f"提交任务失败: {submit_result.get('msg', '未知错误')}",
+                "data": None
+            }
+
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务提交成功", file=sys.stderr)
+
+        # 创建日志文件
+        log_file = self._setup_log(project_id)
+
+        return {
+            "code": 200,
+            "status": "started",
+            "data": {
+                "project_id": project_id,
+                "log_file": str(log_file)
+            }
+        }
 
     def download_video(self, download_url: str, project_name: str, output_dir: Optional[str] = None) -> Optional[str]:
         """
@@ -585,14 +683,18 @@ class TrusteeModeAPI:
                     # 自动下载视频到本地
                     local_path = self.download_video(download_url, project_name)
 
+                    # 对 signed_url 做 URL 编码：~ → %7E
+                    # 飞书发送文本消息时会在 ~ 处截断链接，导致 Signature 不完整
+                    safe_signed_url = signed_url.replace("~", "%7E")
+
                     return {
                         "code": 200,
                         "msg": "success",
                         "uuid": query_result.get("uuid", ""),
                         "data": {
                             "project_id": project_id,
-                            "signed_url": signed_url,      # 在线播放链接（浏览器直接播放）
-                            "download_url": download_url,  # 下载链接（带 attachment 参数）
+                            "signed_url": safe_signed_url,  # 在线播放链接（~ 已编码为 %7E，飞书可正常点击）
+                            "download_url": download_url,
                             "thumbnail_url": thumbnail_url,
                             "duration": duration,
                             "shot_count": shot_count,
@@ -613,6 +715,219 @@ class TrusteeModeAPI:
 
             # 等待后继续查询
             time.sleep(query_interval)
+
+    def poll_until_complete(self, project_id: str, interval: int = 3) -> Dict[str, Any]:
+        """
+        Phase 3：轮询直到完成（乐观同步路径）
+        含完整工作流：查询 → 支付 → 等待完成 → .sent 防重复
+        """
+        start_time = datetime.now()
+        timeout = timedelta(hours=1)
+
+        video_first_model = "grok"
+        video_second_model = "seedance15-pro"
+        image_first_model = "seedream45"
+        paid = False
+        max_retries = 5
+        retry_delay = 5
+        last_logged_step = ""
+        last_logged_status = ""
+        completed_no_asset_count = 0  # 防止 completed 但无 video_asset 无限等待
+
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始轮询项目 {project_id}...", file=sys.stderr)
+
+        while True:
+            # 检查超时
+            if datetime.now() - start_time > timeout:
+                return {
+                    "code": -1,
+                    "msg": f"轮询超时（超过1小时），project_id={project_id}",
+                    "data": {"project_id": project_id}
+                }
+
+            # 查询进度（带重试机制）
+            query_result = None
+            query_success = False
+            retry_count = 0
+
+            while retry_count < max_retries:
+                try:
+                    query_result = self.query_progress(project_id)
+                    code = query_result.get("code")
+                    if isinstance(code, str):
+                        code = int(code) if code.isdigit() else 0
+
+                    if code == 0 or code == 200:
+                        query_success = True
+                        break
+
+                    error_msg = query_result.get("msg", "")
+                    error_str = str(error_msg)
+                    is_network_error = any(kw in error_str for kw in
+                        ["Connection", "Remote", "timeout", "aborted", "disconnected"])
+
+                    if not is_network_error:
+                        return {
+                            "code": code,
+                            "msg": f"查询进度失败: {error_msg}",
+                            "data": {"project_id": project_id}
+                        }
+
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 网络错误，{retry_delay}秒后重试 ({retry_count}/{max_retries})", file=sys.stderr)
+                        time.sleep(retry_delay)
+                    else:
+                        time.sleep(interval)
+                        break
+
+                except Exception as e:
+                    error_str = str(e)
+                    is_network_error = any(kw in error_str for kw in
+                        ["Connection", "Remote", "timeout", "aborted", "disconnected"])
+
+                    if is_network_error:
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 网络异常，{retry_delay}秒后重试 ({retry_count}/{max_retries})", file=sys.stderr)
+                            time.sleep(retry_delay)
+                        else:
+                            time.sleep(interval)
+                            break
+                    else:
+                        return {
+                            "code": -1,
+                            "msg": f"查询进度异常: {error_str}",
+                            "data": {"project_id": project_id}
+                        }
+
+            if not query_success:
+                continue
+
+            # 解析查询结果
+            data = query_result.get("data", {})
+            status = data.get("status", "unknown")
+            current_step = data.get("current_step", "")
+            pay_status = data.get("pay_status", "")
+            err_msg = data.get("err_msg", "")
+
+            # 检查任务失败
+            if status == "failed" or err_msg:
+                return {
+                    "code": -1,
+                    "msg": f"任务失败: {err_msg or '未知错误'}",
+                    "data": {"project_id": project_id}
+                }
+
+            # 检查子步骤失败
+            steps = data.get("steps", [])
+            for step in steps:
+                sub_steps = step.get("sub_steps", [])
+                for sub_step in sub_steps:
+                    if sub_step.get("status") == "failed" or sub_step.get("error"):
+                        return {
+                            "code": -1,
+                            "msg": f"子步骤失败: {sub_step.get('step', '未知')} - {sub_step.get('error', '未知错误')}",
+                            "data": {"project_id": project_id}
+                        }
+
+            # 支付逻辑（迁移自 execute_workflow）
+            if not paid and (pay_status == "pending" or (current_step and "pay" in current_step.lower())):
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 检测到待支付状态，执行支付...", file=sys.stderr)
+                pay_result = self.pay(
+                    project_id=project_id,
+                    video_first_model=video_first_model,
+                    video_second_model=video_second_model,
+                    image_first_model=image_first_model
+                )
+                code = pay_result.get("code")
+                if isinstance(code, str):
+                    code = int(code) if code.isdigit() else 0
+
+                if code != 0 and code != 200:
+                    return {
+                        "code": code,
+                        "msg": f"支付失败: {pay_result.get('msg', '未知错误')}",
+                        "data": {"project_id": project_id}
+                    }
+                paid = True
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 支付成功，继续查询...", file=sys.stderr)
+                continue
+
+            # 检查完成
+            if status == "completed":
+                video_asset = data.get("video_asset", {})
+                download_url = video_asset.get("download_url") if video_asset else None
+
+                if video_asset and download_url:
+                    # 防重复：检查 .sent 文件
+                    if self._check_sent(project_id):
+                        return {
+                            "code": 200,
+                            "status": "already_sent",
+                            "msg": "结果已推送，跳过重复发送",
+                            "data": {"project_id": project_id}
+                        }
+
+                    signed_url = video_asset.get("signed_url", "")
+                    thumbnail_url = video_asset.get("thumbnail_url", "")
+                    duration = video_asset.get("duration", 0)
+                    shot_count = data.get("shot_count", 0)
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务完成！时长: {duration}s | 分镜数: {shot_count}", file=sys.stderr)
+
+                    # 下载视频
+                    local_path = None
+                    download_failed = False
+                    try:
+                        local_path = self.download_video(download_url, project_id)
+                    except Exception as e:
+                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 视频下载失败: {e}", file=sys.stderr)
+                        download_failed = True
+
+                    # 对 signed_url 做 URL 编码：~ → %7E
+                    safe_signed_url = signed_url.replace("~", "%7E")
+
+                    # 标记已推送
+                    self._mark_sent(project_id)
+
+                    result = {
+                        "code": 200,
+                        "msg": "success",
+                        "data": {
+                            "project_id": project_id,
+                            "signed_url": safe_signed_url,
+                            "download_url": download_url,
+                            "thumbnail_url": thumbnail_url,
+                            "duration": duration,
+                            "shot_count": shot_count,
+                            "local_path": local_path,
+                            "video_asset": video_asset,
+                            "status": status
+                        }
+                    }
+                    if download_failed:
+                        result["data"]["download_failed"] = True
+                    return result
+                else:
+                    # completed 但无 video_asset：计数器限制等待（最多约60秒）
+                    completed_no_asset_count += 1
+                    if completed_no_asset_count >= 20:
+                        return {
+                            "code": -1,
+                            "msg": f"任务已完成但持续无视频资源（等待超过60秒），project_id={project_id}",
+                            "data": {"project_id": project_id}
+                        }
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 状态已完成，等待视频资源生成 ({completed_no_asset_count}/20)...", file=sys.stderr)
+            else:
+                completed_no_asset_count = 0  # 重置计数器
+
+            # 仅在状态或步骤发生变化时打印
+            if status != last_logged_status or current_step != last_logged_step:
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 状态: {status} | 步骤: {current_step} | 支付: {pay_status}", file=sys.stderr)
+                last_logged_status = status
+                last_logged_step = current_step
+
+            time.sleep(interval)
 
 
 def print_response(result: Dict[str, Any], pretty: bool = True):
@@ -688,6 +1003,16 @@ def main():
                                 help='视频时长: auto/30/60/120/180/240/300（默认: auto）')
     workflow_parser.add_argument('--project-name', required=True, dest='project_name', help='项目名称')
     workflow_parser.add_argument('--style-id', type=int, help='风格ID（可选）')
+
+    # start 命令（Phase 1：快速创建项目并提交任务，< 10秒）
+    start_parser = subparsers.add_parser('start', help='Phase 1：快速创建项目并提交任务（< 10秒完成）')
+    start_parser.add_argument('--story', required=True, dest='diy_story', help='故事创意内容')
+    start_parser.add_argument('--aspect', required=True, choices=['16:9', '9:16'], help='视频宽高比: 16:9 或 9:16')
+    start_parser.add_argument('--project-name', required=True, dest='project_name', help='项目名称')
+    start_parser.add_argument('--duration', default='auto', dest='video_duration',
+                             choices=['auto', '30', '60', '120', '180', '240', '300'],
+                             help='视频时长（默认: auto）')
+    start_parser.add_argument('--style-id', type=int, help='风格ID（可选）')
     
     args = parser.parse_args()
     
@@ -740,45 +1065,40 @@ def main():
     
     elif args.command == 'query':
         if args.poll:
-            # 轮询模式
-            print(f"开始轮询查询项目 {args.project_id}...", file=sys.stderr)
-            while True:
-                result = api.query_progress(args.project_id)
-                
-                # 兼容不同的响应格式：code可能是字符串"200"或数字200
-                code = result.get("code")
-                if isinstance(code, str):
-                    code = int(code) if code.isdigit() else 0
-                
-                if code != 0 and code != 200:
-                    print_response(result, args.pretty)
-                    break
-                
-                # 如果成功，继续处理数据
-                
-                data = result.get("data", {})
-                status = data.get("status", "unknown")
-                current_step = data.get("current_step", "")
-                
-                print(f"\n任务状态: {status}, 当前步骤: {current_step}", file=sys.stderr)
-                print_response(result, args.pretty)
-                
-                if status == "completed":
-                    video_asset = data.get("video_asset", {})
-                    if video_asset:
-                        print(f"\n视频下载URL: {video_asset.get('download_url')}", file=sys.stderr)
-                        print(f"视频时长: {video_asset.get('duration')}秒", file=sys.stderr)
-                    break
-                elif status == "failed":
-                    err_msg = data.get("err_msg", "")
-                    print(f"\n任务失败: {err_msg}", file=sys.stderr)
-                    break
-                
-                time.sleep(args.interval)
-        else:
-            # 单次查询
-            result = api.query_progress(args.project_id)
+            # Phase 3：轮询模式（乐观同步路径），含完整工作流（支付、下载、.sent 防重复）
+            result = api.poll_until_complete(
+                project_id=args.project_id,
+                interval=args.interval
+            )
             print_response(result, args.pretty)
+            code = result.get("code")
+            if isinstance(code, str):
+                code = int(code) if code.isdigit() else 0
+            if code != 0 and code != 200:
+                sys.exit(1)
+        else:
+            # 单次查询（供 cron 使用）
+            result = api.query_progress(args.project_id)
+            # 单次查询也加 .sent 防重复
+            data = result.get("data", {}) if result else {}
+            status = data.get("status", "")
+            if status == "completed":
+                video_asset = data.get("video_asset", {})
+                if video_asset and video_asset.get("download_url"):
+                    if api._check_sent(args.project_id):
+                        print_response({
+                            "code": 200,
+                            "status": "already_sent",
+                            "msg": "结果已推送，跳过重复发送",
+                            "data": {"project_id": args.project_id}
+                        }, args.pretty)
+                    else:
+                        api._mark_sent(args.project_id)
+                        print_response(result, args.pretty)
+                else:
+                    print_response(result, args.pretty)
+            else:
+                print_response(result, args.pretty)
     
     elif args.command == 'pay':
         result = api.pay(
@@ -834,6 +1154,22 @@ def main():
         else:
             print_response(result, args.pretty)
     
+    elif args.command == 'start':
+        # Phase 1：快速创建项目并提交任务
+        result = api.create_and_submit(
+            diy_story=args.diy_story,
+            aspect=args.aspect,
+            project_name=args.project_name,
+            video_duration=args.video_duration,
+            style_id=args.style_id if hasattr(args, 'style_id') and args.style_id is not None else None
+        )
+        print_response(result, args.pretty)
+        code = result.get("code")
+        if isinstance(code, str):
+            code = int(code) if code.isdigit() else 0
+        if code != 0 and code != 200:
+            sys.exit(1)
+
     elif args.command == 'workflow':
         result = api.execute_workflow(
             diy_story=args.diy_story,

@@ -41,10 +41,15 @@ metadata: {"openclaw": {"requires": {"env": ["API_KEY"], "bins": ["python3"]}, .
 
 ### 两层 API 调用模式
 
-**giggle-\* 技能**（Trustee Mode）：工作流较重，调用链为：
-`创建项目 → 提交任务 → 轮询进度（每 3 秒）→ 自动支付 → 等待完成（最长 1 小时）→ 返回下载链接`
+**giggle-\* 技能**（Trustee Mode）：长耗时工作流，采用「同步等待 + Cron 兜底」双路径：
 
-核心脚本均实现 `execute_workflow()` 函数，Agent 直接调用，函数会阻塞直到完成。
+- **Phase 1**：`start` 子命令（< 10 秒），创建项目 + 提交任务，stdout 返回 `project_id`
+- **Phase 2**：Cron 兜底（每 3 分钟），调用 `query --project-id <id>` 轮询进度
+- **Phase 3**：`query --poll`，同步等待完成（乐观路径，短任务直接完成）
+
+完整工作流：`start → [Cron 注册] → query --poll → 返回结果（含支付、下载、.sent 防重复）`
+
+旧接口 `execute_workflow()` 仍可用（阻塞，最长 1 小时），不推荐 Agent 使用。
 
 **kie-\* 技能**：提交 → 轮询 → 返回结果（等待最长 10 分钟）。
 
@@ -56,7 +61,9 @@ metadata: {"openclaw": {"requires": {"env": ["API_KEY"], "bins": ["python3"]}, .
 
 所有 Python 脚本均遵循：
 - `--json`：输出结构化 JSON 到 stdout；进度/日志统一输出到 stderr
-- `--no-wait`：异步提交，立即返回 task_id，后续用 `--query --task-id <id>` 轮询
+- `--no-wait`：异步提交，立即返回 `{"status": "started", "task_id": "...", "log_file": "..."}` 到 stdout
+- `--query`（giggle-music）exit code：`0` = 完成，`1` = 失败，`2` = 进行中（processing/pending）
+- `.sent` 文件防重复：`~/.openclaw/skills/<skill>/logs/<id>.sent`，完成推送后创建，防止 Cron 与同步路径双重推送
 - API Key 从环境变量或项目根目录 `.env` 文件读取（`python-dotenv`）
 
 ## 环境配置
@@ -84,15 +91,26 @@ pip install requests python-dotenv
 ## 常用测试命令
 
 ```bash
-# giggle-drama：视频生成（阻塞，最长 1 小时）
+# giggle-drama：Phase 1 提交任务（< 10 秒，返回 project_id）
+python3 giggle-drama/scripts/trustee_api.py start \
+  --story "测试故事" --aspect 16:9 --project-name "test"
+
+# giggle-drama：Phase 3 同步等待（含支付、下载、.sent 防重复）
+python3 giggle-drama/scripts/trustee_api.py query \
+  --project-id <project_id> --poll
+
+# giggle-drama：旧接口，阻塞等待（最长 1 小时，不推荐 Agent 使用）
 python3 giggle-drama/scripts/trustee_api.py workflow \
   --story "测试故事" --aspect 16:9 --project-name "test"
 
 # giggle-aimv：MV 生成
 python3 giggle-aimv/scripts/trustee_api.py --help
 
-# giggle-music：音乐生成
-python3 giggle-music/scripts/giggle_music_api.py --prompt "测试" --json
+# giggle-music：Phase 1 提交任务（返回 task_id 到 stdout）
+python3 giggle-music/scripts/giggle_music_api.py --prompt "测试" --no-wait
+
+# giggle-music：Phase 3 查询结果（exit 0=完成, 1=失败, 2=进行中）
+python3 giggle-music/scripts/giggle_music_api.py --query --task-id <task_id> --json
 
 # giggle-image：图像生成（Seedream 模型）
 python3 giggle-image/scripts/seedream_api.py --prompt "测试" --json

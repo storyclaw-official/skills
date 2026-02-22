@@ -2,7 +2,26 @@
 
 ## [Unreleased]
 
+### 新增
+- `giggle-drama`：新增 `start` 子命令（Phase 1），< 10 秒完成创建项目 + 提交任务，stdout 返回 `{"status": "started", "project_id": "...", "log_file": "..."}`
+- `giggle-drama`：新增 `poll_until_complete()` 方法（Phase 3），含完整工作流（支付逻辑、下载、`.sent` 防重复、completed 无资源超时限制）
+- `giggle-drama`：新增日志系统，路径 `~/.openclaw/skills/giggle-drama/logs/{project_id}_{yyyyMMdd_HHmmss}.log`
+- `giggle-drama`：新增 `.sent` 防重复文件，`query --poll` 与 `query`（单次）均检查，防止 Cron 与同步路径双重推送
+- `giggle-music`：新增日志系统，路径 `~/.openclaw/skills/giggle-music/logs/{task_id}_{yyyyMMdd_HHmmss}.log`
+- `giggle-music`：新增 `.sent` 防重复文件（同 giggle-drama 机制）
+
 ### 变更
+- `giggle-drama` SKILL.md v2.0：重写为三阶段双路径架构（Phase 1 start → Phase 2 Cron 兜底 → Phase 3 同步等待），附步骤翻译表、失败处理、Gateway 重启恢复指令
+- `giggle-music` SKILL.md v2.0：重写为三阶段双路径架构，`--no-wait` stdout 输出 `{"status": "started", "task_id": "..."}`（原为 stderr）
+- `giggle-music`：修复 `--query` exit code：completed → exit(0)；failed → exit(1)；processing/pending → **exit(2)**（原全部 exit(1)）
+- `giggle-drama` `query --poll`：升级为调用 `poll_until_complete`，不再仅简单轮询，完整处理支付与下载
+- `giggle-drama` `query`（单次）：加入 `.sent` 防重复逻辑，供 Cron 调用时防重复推送
+
+### 修复
+- `giggle-drama`：修复 `status=completed` 但 `video_asset` 为空时的无限等待问题（新增 20 轮计数器，约 60 秒后报错退出）
+- `giggle-drama`：修复视频下载失败时静默无输出问题，现在返回结果中包含 `"download_failed": true`，并提示用 `signed_url` 备用
+
+### 历史变更
 - 统一环境变量管理：移除各技能目录的隐藏 `.env.example`，改为根目录统一 `env.example`
 - 新增各技能目录可见的 `env.example`（非隐藏），供独立使用时参考
 - 为 6 个缺失 metadata 的技能补充 `SKILL.md` frontmatter（`requires.env`、`user-invocable`、`emoji` 等字段）：giggle-aimv、giggle-image、giggle-music、giggle-screenplay、kie-nano-banana、kie-grok-imagine

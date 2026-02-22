@@ -2,180 +2,164 @@
 name: giggle-drama
 description: 用户在有生成视频需求、生成短视频需求、有一个创意需要生成视频、或查看可用风格时使用此skill，可以引导用户查看风格。
 user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎬","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt","cp {baseDir}/.env.example {baseDir}/.env","echo 'Please edit .env and add your GIGGLE_API_KEY'"]},"version":"1.0.0","author":"姜式伙伴"}
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎬","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt","cp {baseDir}/.env.example {baseDir}/.env","echo 'Please edit .env and add your GIGGLE_API_KEY'"]},"version":"2.0.0","author":"姜式伙伴"}
 ---
 
 # 托管模式V2 API Skill
 
-此skill用于调用托管模式V2 API，执行完整的视频生成工作流。
+此 skill 用于调用托管模式V2 API，执行视频生成工作流。
 
 ## 启动指令
 
-**重要**：每次skill启动时，必须：
-1. 使用标题："🎬 **「姜式伙伴」AI 导演 - 智能视频创作助手**"
-2. 向用户展示以下"可用视频风格"列表，让用户了解可以选择的风格选项
-3. 询问用户需要提供的信息（故事创意、视频比例、项目名称、时长、风格）
-4. 在询问信息后，展示一个简洁的使用范例，格式如："关于故乡记忆的短视频，回忆杀，16:9，30s"
+**重要**：
+- 如果用户已提供足够信息（故事、比例），直接执行视频生成，不展示引导文字
+- 只有当用户明确询问"有哪些风格"或信息不足时，才展示风格列表或询问补充信息
+- 不要输出欢迎标题或固定开场白
 
 ## 可用视频风格
 
-在生成视频时，您可以选择以下任一风格（style_id）：
-
 | ID  | 风格名称 | 分类 | 描述 |
 |-----|---------|------|------|
-| 142 | 3D古风 | 3D动画 | 3D 国风仙侠风格，偏 CG 渲染质感，人物与场景具有史诗级幻想氛围 |
-| 143 | 2D漫剧 | 2D插画 | 融合日漫与国漫风格的二次元画风，低饱和配色，适合剧情向插画 |
-| 144 | 吉卜力 | 2D插画 | 治愈系手绘插画风格，色彩柔和，情绪温暖，富有生活气息 |
-| 145 | 皮克斯 | 3D动画 | 典型皮克斯风格的 3D 卡通动画，角色圆润，情绪表达强烈 |
-| 146 | 写实风格 | 电影写实 | 偏电影级的写实视觉风格，强调真实光影与镜头感 |
-| 147 | 二次元 | 2D插画 | 标准二次元动漫画风，线条清晰，色彩明亮，细节丰富 |
-| 148 | 国风水墨 | 2D插画 | 中国传统水墨风格插画，讲究留白与意境表达 |
+| 142 | 3D古风 | 3D动画 | 3D 国风仙侠风格，偏 CG 渲染质感 |
+| 143 | 2D漫剧 | 2D插画 | 融合日漫与国漫风格的二次元画风 |
+| 144 | 吉卜力 | 2D插画 | 治愈系手绘插画风格，色彩柔和 |
+| 145 | 皮克斯 | 3D动画 | 典型皮克斯风格的 3D 卡通动画 |
+| 146 | 写实风格 | 电影写实 | 偏电影级的写实视觉风格 |
+| 147 | 二次元 | 2D插画 | 标准二次元动漫画风 |
+| 148 | 国风水墨 | 2D插画 | 中国传统水墨风格插画 |
 
-**提示**：如果不指定风格ID，系统将自动选择最适合您故事内容的风格。
+**提示**：不指定风格 ID 时，系统自动选择最适合的风格。
 
-## 工作流函数
+---
 
-主要使用 `execute_workflow` 函数执行完整工作流。该函数会自动执行以下步骤：
-1. 创建项目
-2. 提交任务
-3. 循环查询进度（每3秒查询一次）
-4. 自动检测待支付状态并执行支付（如果需要）
-5. 等待任务完成（最多等待1小时）
-6. 🎬 **自动下载视频到本地**（新功能！）
-7. 返回视频下载链接和本地路径
+## 执行流程（三阶段双路径）
 
-**重要**：调用此函数后，只需等待函数返回结果即可，函数会自动处理所有中间步骤。视频会自动下载到 `~/Downloads/giggle-videos/` 目录。
+视频生成通常需要 10-30 分钟。采用「同步等待 + Cron 兜底」双路径，确保用户一定收到结果。
 
-### 函数签名
+---
 
-```python
-execute_workflow(
-    diy_story: str,           # 故事创意内容（必需）
-    aspect: str,              # 视频宽高比 (16:9/9:16)（必需）
-    project_name: str,        # 项目名称（必需）
-    video_duration: str = "auto",  # 视频时长，默认为"auto"（可选）
-    style_id: Optional[int] = None  # 风格ID（可选）
-)
+### 第一步：提交任务（Phase 1，exec < 10 秒完成）
+
+**先发送消息给用户**："视频生成中，通常 10-30 分钟，每3分钟自动报告进度，请耐心等待。"
+
+```bash
+python3 scripts/trustee_api.py start \
+  --story "故事内容" \
+  --aspect "16:9" \
+  --project-name "项目名称"
 ```
 
-### 参数说明
+返回示例：
+```json
+{"code": 200, "status": "started", "data": {"project_id": "xxx", "log_file": "/path/logs/xxx.log"}}
+```
 
-1. **diy_story**（必需）：故事创意内容
-2. **aspect**（必需）：视频宽高比，可选值：`16:9` 或 `9:16`
-3. **project_name**（必需）：项目名称
-4. **video_duration**（可选）：视频时长，可选值：`auto`、`30`、`60`、`120`、`180`、`240`、`300`。如果用户不提及时长，默认使用 `"auto"`
-5. **style_id**（可选）：风格ID。如果用户不指定风格ID，默认不传此参数
+**立即将 project_id 写入记忆**（`addMemory`）：
+```
+giggle-drama project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
+```
 
-### 使用流程
+如果 start 失败（code != 200）：告知错误信息，询问用户是否重试，**不执行后续步骤**。
 
-1. **如果用户想查看可用风格**：
-   - 调用 `get_styles()` 函数获取风格列表
-   - 向用户展示所有可用风格（ID、名称、分类、描述）
-   - 等待用户选择风格
+---
 
-2. **执行工作流**：
-   - 调用 `execute_workflow()` 函数
-   - 传入用户提供的故事创意、比例、项目名称
-   - 如果用户指定了时长，传入时长参数；否则使用默认值 `"auto"`
-   - 如果用户选择了风格，传入风格ID；否则不传风格ID参数
-   - **等待函数返回结果**：函数会自动处理所有步骤（创建项目、提交任务、查询进度、支付、等待完成），最终返回视频下载链接或错误信息
+### 第二步：注册 Cron（立刻注册，在 Phase 3 之前）
 
-### 示例
+**目的**：兜底路径，无论 Phase 3 是否成功，Cron 保证用户收到结果。
+
+注册间隔 **3 分钟** 的 Cron，每次执行：
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id>
+```
+
+**Cron 处理逻辑**（根据返回结果）：
+
+| 返回状态 | 处理 |
+|---------|------|
+| `status: "already_sent"` | 跳过，取消 Cron |
+| `code: 200` + 含 `signed_url` | 发送结果给用户，取消 Cron |
+| `status: "failed"` / `code: -1` 且含 `err_msg` | 发错误消息给用户，取消 Cron |
+| 其他（进行中） | 发步骤进度，Cron 继续 |
+
+**步骤进度消息格式**（从 `data.current_step` 和 `data.steps` 读取）：
+```
+视频渲染中 — 已完成：剧本✓ 角色✓ 分镜✓ 镜头图✓ | 已用时 X 分钟
+```
+
+步骤名称翻译：
+- `script` → 剧本生成
+- `character` → 角色设计
+- `storyboard` → 分镜制作
+- `shot` → 镜头图渲染
+- `video` → 视频渲染
+
+---
+
+### 第三步：同步等待（Phase 3，乐观路径）
+
+**目的**：如果视频较快完成（< LLM 超时），直接在此步骤返回结果。
+
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id> --poll
+```
+
+**处理逻辑**：
+
+- 返回 `status: "already_sent"` → 跳过（Cron 已发送），取消 Cron
+- 返回 `code: 200` + 含 `signed_url` → **立即发送结果给用户**，取消 Cron
+- exec 超时/失败 → Cron 已在运行，继续等待即可
+
+---
+
+## 结果消息格式
+
+收到完成结果后，发送以下格式的消息：
+
+```
+视频生成完成
+
+▶️ 在线播放：<data.signed_url>
+⏱️ 时长：<data.duration>s | 分镜：<data.shot_count> 个
+📁 本地：<data.local_path>（如下载失败则无此行）
+```
+
+**说明**：
+- `data.signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击
+- 如果 `data.download_failed == true`，则无本地路径，提示用户可直接用 `data.signed_url` 在浏览器播放
+
+---
+
+## 失败处理
+
+| 场景 | 处理方式 |
+|------|---------|
+| `start` 失败 | 告知错误，询问用户是否重试 |
+| 支付失败（msg 含"积分"） | "积分不足，请充值后告诉我重试" |
+| 子步骤失败 | "XX步骤失败，是否重新生成？" |
+| 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
+| 视频下载失败 | 提供 `signed_url`，"可直接在浏览器打开" |
+
+---
+
+## Gateway 重启后恢复
+
+用户询问之前视频进度时：
+
+1. **记忆中有 project_id** → 直接执行 `query --project-id xxx`，**绝不重新 start**
+2. **记忆无，有日志** → `ls ~/.openclaw/skills/giggle-drama/logs/` 找最近 project_id，再 query
+3. **两者都无** → 告知用户，询问是否重新生成
+
+---
+
+## 其他命令
 
 **查看风格列表**：
-```python
-api = TrusteeModeAPI()
-styles_result = api.get_styles()
-# 展示风格列表给用户
+```bash
+python3 scripts/trustee_api.py styles
 ```
 
-**执行工作流（不指定时长和风格）**：
-```python
-api = TrusteeModeAPI()
-# 调用后会阻塞等待，直到返回下载链接或错误信息
-result = api.execute_workflow(
-    diy_story="一个关于冒险的故事...",
-    aspect="16:9",
-    project_name="我的视频项目"
-)
-# result 包含下载链接或错误信息
+**遗留工作流（不推荐，阻塞等待）**：
+```bash
+python3 scripts/trustee_api.py workflow \
+  --story "..." --aspect "16:9" --project-name "..."
 ```
-
-**执行工作流（指定时长，不指定风格）**：
-```python
-api = TrusteeModeAPI()
-# 调用后会阻塞等待，直到返回下载链接或错误信息
-result = api.execute_workflow(
-    diy_story="一个关于冒险的故事...",
-    aspect="16:9",
-    project_name="我的视频项目",
-    video_duration="60"
-)
-# result 包含下载链接或错误信息
-```
-
-**执行工作流（指定时长和风格）**：
-```python
-api = TrusteeModeAPI()
-# 调用后会阻塞等待，直到返回下载链接或错误信息
-result = api.execute_workflow(
-    diy_story="一个关于冒险的故事...",
-    aspect="16:9",
-    project_name="我的视频项目",
-    video_duration="60",
-    style_id=142
-)
-# result 包含下载链接或错误信息
-```
-
-### 返回值
-
-**注意**：函数会阻塞执行，直到任务完成（成功或失败）或超时（1小时）。调用后只需等待返回结果即可。
-
-成功时返回包含下载链接和本地路径的响应：
-```json
-{
-    "code": 200,
-    "msg": "success",
-    "uuid": "...",
-    "data": {
-        "project_id": "...",
-        "signed_url": "https://...",     // 在线播放链接（优先使用）
-        "download_url": "https://...",   // 下载链接（带 attachment 参数）
-        "thumbnail_url": "https://...",  // 封面缩略图
-        "duration": 16.28,               // 视频时长（秒）
-        "shot_count": 4,                 // 分镜数量
-        "local_path": "/Users/xxx/Downloads/giggle-videos/项目名称_20260206_220000.mp4",
-        "video_asset": {...},
-        "status": "completed"
-    }
-}
-```
-
-失败时返回错误信息：
-```json
-{
-    "code": -1,
-    "msg": "错误信息",
-    "data": null
-}
-```
-
-## 🎯 重要：如何向用户展示结果
-
-**当视频生成成功后，必须向用户展示以下信息：**
-
-```
-✅ 视频生成成功！
-
-▶️ 在线播放：https://...（从 result["data"]["signed_url"] 获取）
-⬇️ 下载链接：https://...（从 result["data"]["download_url"] 获取）
-📁 本地路径：/path/to/video.mp4
-⏱️ 时长：16.28s | 🎬 分镜数：4
-```
-
-**关键要求：**
-1. **优先展示 `result["data"]["signed_url"]`（在线播放，浏览器直接打开可播放）**
-2. **同时展示 `result["data"]["download_url"]`（点击直接下载）**
-3. **展示时长和分镜数，让用户了解生成结果**
-4. **不要只展示本地路径，URL 才是用户最需要的**
