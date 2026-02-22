@@ -2,12 +2,12 @@
 name: giggle-aimv
 description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词/上传音乐生成视频等需求时使用。支持三种音乐生成模式（提示词、自定义、上传），调用 MV 托管 API 完成完整工作流。
 user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎵","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎵","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"2.0.0","author":"姜式伙伴"}
 ---
 
 # MV 托管模式 API Skill
 
-此 skill 用于调用 MV 托管模式 API，执行完整的 MV 生成工作流：创建项目 → 提交任务 → 查询进度 → 支付 → 等待完成。
+此 skill 用于调用 MV 托管模式 API，执行 MV 生成工作流（通常 3-10 分钟）。
 
 ## 三种音乐生成模式
 
@@ -39,94 +39,148 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 **上传模式 (upload)**：
 - `music_asset_id`：已有音乐资产 ID（必需）
 
-## 工作流函数
+## 执行流程（三阶段双路径）
 
-使用 `execute_workflow` 执行完整工作流，函数会自动：创建项目 → 提交任务 → 轮询进度（每 3 秒）→ 检测待支付并支付 → 等待完成（最多 1 小时）。
+MV 生成通常需要 3-10 分钟。采用「同步等待 + Cron 兜底」双路径，确保用户一定收到结果。
 
-**重要**：调用后只需等待函数返回，中间步骤自动处理。
+---
 
-### 函数签名
+### 第一步：提交任务（Phase 1，exec < 10 秒完成）
 
-```python
-execute_workflow(
-    music_generate_type: str,      # 模式：prompt / custom / upload
-    aspect: str,                   # 宽高比 16:9 或 9:16
-    project_name: str,             # 项目名称
-    reference_image: str = "",      # 参考图 asset_id（与 reference_image_url 二选一）
-    reference_image_url: str = "", # 参考图下载链接（与 reference_image 二选一），此字段同时支持base64编码的图片，示例："iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-    scene_description: str = "",    # 场景描述，默认空
-    subtitle_enabled: bool = False,# 字幕开关，默认 False
-    # 提示词模式
-    prompt: str = "",
-    vocal_gender: str = "auto",
-    instrumental: bool = False,
-    # 自定义模式
-    lyrics: str = "",
-    style: str = "",
-    title: str = "",
-    # 上传模式
-    music_asset_id: str = "",
-)
-```
-
-### 参数提取规则
-
-1. **reference_image 与 reference_image_url**：至少一个，用户提供 asset_id 用 reference_image，提供图片链接用 reference_image_url
-2. **scene_description**：默认为空，**仅当用户明确提到「场景」「画面描述」「视觉风格」等时**才填充
-3. **subtitle_enabled**：默认为 False，**仅当用户明确要求字幕时**设为 True
-4. **aspect**：用户提到竖屏/9:16 时用 `9:16`，否则默认 `16:9`
-5. **模式判断**：用户说「用提示词/描述生成」→ prompt；「给歌词/歌词是」→ custom；「上传音乐/用我的音乐」→ upload
-
-### 示例
+**先发送消息给用户**："MV 生成中，通常 3-10 分钟，每3分钟自动报告进度，请稍候。"
 
 **提示词模式**：
-```python
-api = MVTrusteeAPI()
-result = api.execute_workflow(
-    music_generate_type="prompt",
-    aspect="16:9",
-    project_name="我的 MV",
-    reference_image_url="https://example.com/ref.jpg",
-    prompt="轻快的流行音乐，阳光沙滩风格",
-    vocal_gender="female"
-)
+```bash
+python3 scripts/trustee_api.py start \
+  --mode prompt \
+  --aspect "16:9" \
+  --project-name "我的MV" \
+  --reference-image-url "https://..." \
+  --prompt "轻快的流行音乐，阳光沙滩风格" \
+  --vocal-gender female
 ```
 
-**自定义模式（用户提供歌词）**：
-```python
-result = api.execute_workflow(
-    music_generate_type="custom",
-    aspect="9:16",
-    project_name="歌词 MV",
-    reference_image="asset_xxx",
-    lyrics="Verse 1: 春天的风...",
-    style="pop",
-    title="春日之歌"
-)
+**自定义模式**：
+```bash
+python3 scripts/trustee_api.py start \
+  --mode custom \
+  --aspect "9:16" \
+  --project-name "歌词MV" \
+  --reference-image "asset_xxx" \
+  --lyrics "Verse 1: 春天的风..." \
+  --style "pop" \
+  --title "春日之歌"
 ```
 
 **上传模式**：
-```python
-result = api.execute_workflow(
-    music_generate_type="upload",
-    aspect="16:9",
-    project_name="上传音乐 MV",
-    reference_image="asset_yyy",
-    music_asset_id="music_asset_zzz"
-)
+```bash
+python3 scripts/trustee_api.py start \
+  --mode upload \
+  --aspect "16:9" \
+  --project-name "上传MV" \
+  --reference-image "asset_yyy" \
+  --music-asset-id "music_asset_zzz"
 ```
 
-**用户提到场景描述时**：
-```python
-result = api.execute_workflow(
-    music_generate_type="prompt",
-    aspect="16:9",
-    project_name="场景 MV",
-    reference_image_url="https://...",
-    prompt="电子舞曲",
-    scene_description="城市夜景，霓虹灯闪烁，车流穿梭"  # 用户明确描述场景时设置
-)
+返回示例：
+```json
+{"code": 200, "status": "started", "data": {"project_id": "xxx", "log_file": "/path/logs/xxx.log"}}
 ```
+
+**立即将 project_id 写入记忆**（`addMemory`）：
+```
+giggle-aimv project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
+```
+
+如果 start 失败（code != 200）：告知错误信息，询问用户是否重试，**不执行后续步骤**。
+
+---
+
+### 第二步：注册 Cron（立刻注册，在 Phase 3 之前）
+
+注册间隔 **3 分钟** 的 Cron，每次执行：
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id>
+```
+
+**Cron 处理逻辑**：
+
+| 返回状态 | 处理 |
+|---------|------|
+| `status: "already_sent"` | 跳过，取消 Cron |
+| `code: 200` + 含 `signed_url` | 发送结果给用户，取消 Cron |
+| `code: -1` 含 `err_msg` | 发错误消息，取消 Cron |
+| 其他（进行中） | 发步骤进度，Cron 继续 |
+
+**步骤进度消息格式**（从 `data.current_step` 和 `data.completed_steps` 读取）：
+```
+MV 生成中 — 已完成：音乐✓ 分镜✓ | 当前：镜头渲染 | 已用时 X 分钟
+```
+
+步骤名称翻译：
+- `music-generate` → 音乐生成
+- `storyboard` → 分镜制作
+- `shot` → 镜头渲染
+- `editor` → 剪辑合成
+
+---
+
+### 第三步：同步等待（Phase 3，乐观路径）
+
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id> --poll
+```
+
+- 返回 `status: "already_sent"` → 跳过，取消 Cron
+- 返回 `code: 200` + 含 `signed_url` → **立即发送结果给用户**，取消 Cron
+- exec 超时 → Cron 已在运行，继续等待即可
+
+---
+
+### 结果消息格式
+
+```
+MV 生成完成
+
+▶️ 在线播放：<data.signed_url>
+⏱️ 时长：<data.duration>s
+```
+
+**注意**：`data.signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击。
+
+---
+
+### 参数提取规则
+
+1. **reference_image 与 reference_image_url**：至少一个，用户提供 asset_id 用 `--reference-image`，提供图片链接或 base64 用 `--reference-image-url`
+2. **scene_description**：默认为空，**仅当用户明确提到「场景」「画面描述」「视觉风格」等时**才填充
+3. **subtitle_enabled**：默认 False，**仅当用户明确要求字幕时**用 `--subtitle`
+4. **aspect**：用户提到竖屏/9:16 时用 `9:16`，否则默认 `16:9`
+5. **模式判断**：用户说「用提示词/描述生成」→ `prompt`；「给歌词/歌词是」→ `custom`；「上传音乐/用我的音乐」→ `upload`
+
+---
+
+### 失败处理
+
+| 场景 | 处理方式 |
+|------|---------|
+| `start` 失败 | 告知错误，询问用户是否重试 |
+| 支付失败 | "积分不足，请充值后告诉我重试" |
+| 子步骤失败 | 询问用户是否重试，可用 `retry --project-id <id> --current-step <step>` |
+| 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
+
+**重试步骤**：
+```bash
+python3 scripts/trustee_api.py retry --project-id <id> --current-step shot
+# current_step 可选：music-generate / storyboard / shot / editor
+```
+
+---
+
+### Gateway 重启后恢复
+
+1. **记忆中有 project_id** → 直接执行 `query --project-id xxx`，**绝不重新 start**
+2. **两者都无** → 告知用户，询问是否重新生成
 
 ### 提交任务 API 请求示例（提示词模式）
 
