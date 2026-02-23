@@ -71,7 +71,7 @@ giggle-image task_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm
 
 ### 第二步：注册 Cron（立刻注册）
 
-注册间隔 **45 秒** 的 Cron，每次执行：
+注册间隔 **45 秒** 的 Cron，**必须指定 `wakeMode: "now"`**（默认 `next-heartbeat` 会导致延迟不触发），每次执行：
 
 ```bash
 python3 scripts/seedream_api.py --query --task-id <task_id> --json
