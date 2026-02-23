@@ -95,7 +95,7 @@ python3 scripts/giggle_music_api.py --query --task-id <task_id>
 
 | stdout `status` | 处理 |
 |----------------|------|
-| `already_sent` | **立即取消 Cron，绝不向用户发送任何消息**（完全静默） |
+| 空输出（stdout 为空） | 已推送过，**立即取消 Cron，绝对不发任何消息**（空输出代表无操作） |
 | 音乐链接列表（非 JSON） | 发送结果给用户，**取消 Cron** |
 | `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
 

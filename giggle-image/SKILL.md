@@ -82,7 +82,7 @@ python3 scripts/seedream_api.py --query --task-id <task_id> --json
 | stdout `status` | 处理 |
 |----------------|------|
 | `completed` | 解析图像 URL，发送结果给用户，**取消 Cron** |
-| `already_sent` | **立即取消 Cron，绝不向用户发送任何消息**（完全静默） |
+| 空输出（stdout 为空） | 已推送过，**立即取消 Cron，绝对不发任何消息**（空输出代表无操作） |
 | `running` / `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
 
 exit code = 1（失败）→ 发送错误消息，取消 Cron

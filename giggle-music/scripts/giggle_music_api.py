@@ -299,9 +299,8 @@ def main():
             status = data.get("status")
 
             if status == TaskStatus.COMPLETED.value:
-                # 防重复：检查 .sent 文件
+                # 防重复：已推送过则空输出 exit(0)，agent 无内容可报告，cron 应静默取消
                 if _check_music_sent(args.task_id):
-                    print(json.dumps({"status": "already_sent", "task_id": args.task_id}, ensure_ascii=False))
                     sys.exit(0)
                 audio_list = client.extract_audio_urls(result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)

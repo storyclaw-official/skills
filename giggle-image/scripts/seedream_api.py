@@ -485,9 +485,8 @@ def main():
             status = data.get("status", "")
 
             if status == TaskStatus.COMPLETED.value:
-                # 防重复推送：已推送过则直接返回 already_sent
+                # 防重复推送：已推送过则空输出 exit(0)，agent 无内容可报告，cron 应静默取消
                 if _check_image_sent(args.task_id):
-                    print(json.dumps({"status": "already_sent", "task_id": args.task_id}, ensure_ascii=False))
                     sys.exit(0)
                 image_urls = client.extract_image_urls(result)
                 prompt = args.prompt or ""
