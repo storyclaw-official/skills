@@ -409,13 +409,15 @@ class MVTrusteeAPI:
                     duration = video_asset.get("duration", 0)
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 任务完成！时长: {duration}s", file=sys.stderr)
                     self._mark_sent(project_id)
+                    # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
+                    safe_signed_url = signed_url.replace("~", "%7E")
                     return {
                         "code": 200,
                         "msg": "success",
                         "uuid": query_result.get("uuid", ""),
                         "data": {
                             "project_id": project_id,
-                            "signed_url": signed_url,
+                            "signed_url": safe_signed_url,
                             "download_url": download_url,
                             "thumbnail_url": thumbnail_url,
                             "duration": duration,
@@ -758,6 +760,9 @@ def main():
                         r = {"code": 200, "status": "already_sent", "msg": "结果已推送，跳过重复发送", "data": {"project_id": args.project_id}}
                     else:
                         api._mark_sent(args.project_id)
+                        # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
+                        if r.get("data", {}).get("video_asset", {}).get("signed_url"):
+                            r["data"]["video_asset"]["signed_url"] = r["data"]["video_asset"]["signed_url"].replace("~", "%7E")
                     print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
                     # exit(0) 隐式：完成或已发送
                 else:

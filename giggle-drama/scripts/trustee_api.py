@@ -1115,6 +1115,9 @@ def main():
                         }, args.pretty)
                     else:
                         api._mark_sent(args.project_id)
+                        # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
+                        if result.get("data", {}).get("video_asset", {}).get("signed_url"):
+                            result["data"]["video_asset"]["signed_url"] = result["data"]["video_asset"]["signed_url"].replace("~", "%7E")
                         print_response(result, args.pretty)
                     # exit(0) 隐式：完成或已发送
                 else:
