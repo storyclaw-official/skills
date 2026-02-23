@@ -284,11 +284,13 @@ class SeedreamAPI:
 
 
 def to_view_url(url: str) -> str:
-    """将下载 URL 转换为在线查看 URL（去掉 response-content-disposition=attachment 参数）"""
+    """将下载 URL 转换为在线查看 URL（去掉 attachment 参数，编码 ~ 为 %7E）"""
     # 去掉 &response-content-disposition=attachment（参数在中间或末尾均兼容）
     url = url.replace("&response-content-disposition=attachment", "")
     url = url.replace("?response-content-disposition=attachment&", "?")
     url = url.replace("?response-content-disposition=attachment", "")
+    # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
+    url = url.replace("~", "%7E")
     return url
 
 

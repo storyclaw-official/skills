@@ -161,6 +161,8 @@ class GiggleMusicAPI:
         for i, url in enumerate(urls, 1):
             # 去掉 response-content-disposition=attachment，生成在线收听链接
             view_url = url.replace("&response-content-disposition=attachment", "")
+            # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
+            view_url = view_url.replace("~", "%7E")
             audio_list.append({
                 "title": f"music_{i}",
                 "audioUrl": view_url,    # 在线收听链接（浏览器直接播放）

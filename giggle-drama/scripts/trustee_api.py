@@ -1084,6 +1084,25 @@ def main():
             # 单次查询也加 .sent 防重复
             data = result.get("data", {}) if result else {}
             status = data.get("status", "")
+            # 自动支付：价格算出来后 pay_status 变 pending，直接付款无需 agent 介入
+            pay_status = data.get("pay_status", "")
+            if pay_status == "pending":
+                pay_r = api.pay(
+                    project_id=args.project_id,
+                    video_first_model="grok",
+                    video_second_model="seedance15-pro",
+                    image_first_model="seedream45"
+                )
+                pay_code = pay_r.get("code")
+                if isinstance(pay_code, str):
+                    pay_code = int(pay_code) if pay_code.isdigit() else 0
+                if pay_code == 200:
+                    price = pay_r.get("data", {}).get("price", 0)
+                    print_response({"code": 200, "status": "running", "msg": f"已自动支付 {price} 积分，视频继续生成中"}, args.pretty)
+                else:
+                    print_response({"code": pay_code, "status": "pay_failed", "msg": "积分不足，请充值后重试"}, args.pretty)
+                    sys.exit(1)
+                sys.exit(0)
             if status == "completed":
                 video_asset = data.get("video_asset", {})
                 if video_asset and video_asset.get("download_url"):
@@ -1096,6 +1115,9 @@ def main():
                         }, args.pretty)
                     else:
                         api._mark_sent(args.project_id)
+                        # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
+                        if result.get("data", {}).get("video_asset", {}).get("signed_url"):
+                            result["data"]["video_asset"]["signed_url"] = result["data"]["video_asset"]["signed_url"].replace("~", "%7E")
                         print_response(result, args.pretty)
                     # exit(0) 隐式：完成或已发送
                 else:
