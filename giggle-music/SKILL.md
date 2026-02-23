@@ -44,6 +44,8 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 **先发送消息给用户**："音乐生成中，通常 1-3 分钟，稍后自动发送结果。"
 
+> **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
+
 #### A：简化模式
 ```bash
 python3 scripts/giggle_music_api.py --prompt "用户描述" --no-wait

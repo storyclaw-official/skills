@@ -15,6 +15,8 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 始终使用 `--json` 获取结构化输出，从 `view_urls` 提取在线查看链接展示给用户，`urls` 为下载链接备用。
 
+> **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
+
 ```bash
 # 文生图（基础）
 python3 scripts/seedream_api.py \

@@ -200,7 +200,8 @@ def load_api_key() -> str:
     if DOTENV_AVAILABLE:
         env_paths = [
             Path.cwd() / ".env",
-            Path(__file__).parent.parent / ".env"
+            Path(__file__).parent.parent / ".env",
+            Path(__file__).parent.parent.parent / ".env",  # ~/.openclaw/skills/.env
         ]
 
         for env_path in env_paths:
