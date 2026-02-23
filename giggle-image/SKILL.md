@@ -82,7 +82,7 @@ python3 scripts/seedream_api.py --query --task-id <task_id> --json
 | stdout `status` | 处理 |
 |----------------|------|
 | `completed` | 解析图像 URL，发送结果给用户，**取消 Cron** |
-| `already_sent` | 结果已推送过，**取消 Cron**，不重复发消息 |
+| `already_sent` | **立即取消 Cron，绝不向用户发送任何消息**（完全静默） |
 | `running` / `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
 
 exit code = 1（失败）→ 发送错误消息，取消 Cron
@@ -93,23 +93,24 @@ exit code = 1（失败）→ 发送错误消息，取消 Cron
 
 ## 结果展示格式
 
-```markdown
-图像生成完成：
+收到完成结果后，**只发 view_urls**，每张图像 URL 单独占一行，不加任何前缀文字（🔗、⬇️、"在线查看"等均不需要）：
 
-🔗 在线查看：https://view_url
-⬇️ 下载链接：https://download_url
 ```
+{view_urls[0]}
+{view_urls[1]}
+...
+```
+
+> 裸 URL 单行发送，飞书可自动渲染为图片预览卡片。不发 urls（下载链接），用户需要下载时可直接长按/右键图片保存。
 
 **输出字段（JSON）：**
 
 | 字段 | 类型 | 说明 |
 |-----|------|------|
 | `prompt` | string | 图像描述提示词 |
-| `view_urls` | string[] | 在线查看链接（浏览器直接显示图像，用于展示） |
-| `urls` | string[] | 原始下载链接（带 attachment 参数，用于下载） |
+| `view_urls` | string[] | 在线查看链接（浏览器直接显示图像，**用这个**） |
+| `urls` | string[] | 原始下载链接（带 attachment 参数，不需要发给用户） |
 | `imageCount` | integer | 生成的图像数量 |
-
-如果用户明确要求保存到本地，追加 `--download` 参数重新运行，或单独运行下载命令。
 
 ---
 
