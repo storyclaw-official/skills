@@ -314,9 +314,10 @@ def main():
                 print(json.dumps({"status": "failed", "err_msg": data.get("err_msg", "未知错误"), "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(1)
             else:
-                # processing / pending → exit(2)，cron 继续；不输出 stderr 避免触发 exec failed
+                # 进行中（processing/pending）→ exit(0) 避免 exec failed 通知
+                # agent 通过 JSON status 字段判断是否继续 cron，不发用户消息
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
-                sys.exit(2)
+                sys.exit(0)
 
         # 自定义模式
         elif args.custom:

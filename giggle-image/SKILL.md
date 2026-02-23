@@ -69,35 +69,25 @@ giggle-image task_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm
 
 ---
 
-### 第二步：注册 Cron（立刻注册，在第三步之前）
+### 第二步：注册 Cron（立刻注册）
 
-注册间隔 **1 分钟** 的 Cron，每次执行：
-
-```bash
-python3 scripts/seedream_api.py --query --task-id <task_id> --json
-```
-
-**Cron 处理逻辑**（根据 exit code）：
-
-| exit code | 含义 | 处理 |
-|-----------|------|------|
-| 0 | 完成 | 发送结果给用户，取消 Cron |
-| 1 | 失败 | 发错误消息，取消 Cron |
-| 2 | 进行中 | 发"图像生成中，请稍候..."，Cron 继续 |
-
----
-
-### 第三步：同步等待（乐观路径）
-
-图像生成通常 30-60 秒，可在此步骤直接获得结果：
+注册间隔 **45 秒** 的 Cron，每次执行：
 
 ```bash
 python3 scripts/seedream_api.py --query --task-id <task_id> --json
 ```
 
-- exit(0) → **立即发送结果给用户**，取消 Cron
-- exit(2) 进行中 → 等待 30 秒后再试一次；Cron 已在运行，确保兜底
-- exit(1) 失败 → 发送错误消息，取消 Cron
+**Cron 处理逻辑**（所有正常情况 exit code = 0，读 stdout JSON 的 `status` 字段决定行为）：
+
+| stdout `status` | 处理 |
+|----------------|------|
+| `completed` | 解析图像 URL，发送结果给用户，**取消 Cron** |
+| `already_sent` | 结果已推送过，**取消 Cron**，不重复发消息 |
+| `running` / `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
+
+exit code = 1（失败）→ 发送错误消息，取消 Cron
+
+> **重要**：进行中时绝不向用户发送任何消息，静默等待即可。
 
 ---
 

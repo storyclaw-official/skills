@@ -51,6 +51,20 @@ class TaskStatus(str, Enum):
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 
+# ── 防重复推送（.sent 文件标记）────────────────────────────────────────────────
+def _get_image_log_dir() -> Path:
+    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-image' / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir
+
+def _check_image_sent(task_id: str) -> bool:
+    return (_get_image_log_dir() / f"{task_id}.sent").exists()
+
+def _mark_image_sent(task_id: str) -> None:
+    (_get_image_log_dir() / f"{task_id}.sent").touch()
+# ────────────────────────────────────────────────────────────────────────────────
+
+
 def resolve_image_ref(image_ref: str) -> Dict[str, str]:
     """
     解析图像引用，自动判断是 URL 还是本地文件路径
@@ -471,27 +485,28 @@ def main():
             status = data.get("status", "")
 
             if status == TaskStatus.COMPLETED.value:
+                # 防重复推送：已推送过则直接返回 already_sent
+                if _check_image_sent(args.task_id):
+                    print(json.dumps({"status": "already_sent", "task_id": args.task_id}, ensure_ascii=False))
+                    sys.exit(0)
                 image_urls = client.extract_image_urls(result)
                 prompt = args.prompt or ""
-
-                print(f"\n生成了 {len(image_urls)} 张图像\n", file=sys.stderr)
-
                 downloaded_files = None
                 if args.download and image_urls:
-                    print("\n下载图像...", file=sys.stderr)
                     downloaded_files = download_images(image_urls, args.output_dir)
-
+                _mark_image_sent(args.task_id)
                 print_output(image_urls, prompt, args.json, downloaded_files)
-                # exit(0) 表示完成
+                sys.exit(0)
             elif status in ("failed", "error"):
-                # stdout 输出供 agent 读取；exit(1) 通知 cron 停止；不输出 stderr
+                # exit(1) 通知 cron 停止；stdout JSON 供 agent 读取
                 err_msg = data.get("err_msg", "未知错误")
                 print(json.dumps({"status": "failed", "error": err_msg, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(1)
             else:
-                # exit(2) 表示进行中（processing/pending），cron 继续；不输出 stderr 避免触发 exec failed
+                # 进行中（running/processing/pending）→ exit(0) 避免 exec failed 通知
+                # agent 通过 JSON status 字段判断是否继续 cron，不发用户消息
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
-                sys.exit(2)
+                sys.exit(0)
 
         # 生成模式
         else:

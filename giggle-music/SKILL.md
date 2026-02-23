@@ -84,39 +84,24 @@ giggle-music task_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm
 
 ---
 
-### 第二步：注册 Cron（立刻注册，在 Phase 3 之前）
+### 第二步：注册 Cron（立刻注册）
 
-注册间隔 **3 分钟** 的 Cron，每次执行：
+注册间隔 **2 分钟** 的 Cron，每次执行：
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```
 
-**Cron 处理逻辑**（根据 exit code 和输出）：
+**Cron 处理逻辑**（所有正常情况 exit code = 0，读 stdout JSON 的 `status` 字段决定行为）：
 
-| exit code | 输出内容 | 处理 |
-|-----------|---------|------|
-| 0 | `{"status": "already_sent"}` | 跳过，取消 Cron |
-| 0 | 音乐链接列表 | 发送结果给用户，取消 Cron |
-| 1 | 错误信息 | 发错误消息，取消 Cron |
-| 2 | `{"status": "processing/pending"}` | 发"音乐生成中，请稍候"，Cron 继续 |
+| stdout `status` | 处理 |
+|----------------|------|
+| `already_sent` | 结果已推送过，**取消 Cron**，不重复发消息 |
+| 音乐链接列表（非 JSON） | 发送结果给用户，**取消 Cron** |
+| `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
 
----
+exit code = 1（失败）→ 发送错误消息，取消 Cron
 
-### 第三步：同步等待（乐观路径）
-
-**目的**：音乐任务通常 1-3 分钟，大概率在此步骤直接完成。
-
-```bash
-python3 scripts/giggle_music_api.py --query --task-id <task_id>
-```
-
-**处理逻辑**：
-- exit(0) + `status: "already_sent"` → 跳过，取消 Cron
-- exit(0) + 音乐链接 → **立即发送结果给用户**，取消 Cron
-- exit(2)（进行中）→ Cron 已在运行，等待即可
-- exit(1)（失败）→ 发送错误消息，取消 Cron
-
-如果首次 query 返回 exit(2)，可隔 30 秒再尝试一次（音乐任务较短）。
+> **重要**：进行中时绝不向用户发送任何消息，静默等待即可。
 
 ---
 
@@ -176,6 +161,5 @@ python3 scripts/giggle_music_api.py --query --task-id <task_id>
 
 | code | 含义 |
 |------|------|
-| 0 | 完成（或 already_sent） |
+| 0 | 正常（已完成、already_sent、或进行中）—— 具体状态看 stdout JSON `status` 字段 |
 | 1 | 失败 |
-| 2 | 进行中（processing / pending） |
