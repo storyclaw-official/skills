@@ -1,0 +1,376 @@
+---
+name: giggle-aimv
+description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词/上传音乐生成视频等需求时使用。支持三种音乐生成模式（提示词、自定义、上传），调用 MV 托管 API 完成完整工作流。
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎵","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"2.0.0","author":"姜式伙伴"}
+---
+
+# MV 托管模式 API Skill
+
+此 skill 用于调用 MV 托管模式 API，执行 MV 生成工作流（通常 3-10 分钟）。
+
+## 三种音乐生成模式
+
+| 模式 | music_generate_type | 必需参数 | 说明 |
+|------|---------------------|----------|------|
+| **提示词模式** | `prompt` | prompt, vocal_gender | 用文字描述生成音乐 |
+| **自定义模式** | `custom` | lyrics, style, title | 提供歌词、风格、歌名 |
+| **上传模式** | `upload` | music_asset_id | 上传已有音乐资产 |
+
+### 共用参数（所有模式必须）
+
+- **reference_image** 或 **reference_image_url**：参考图，至少提供一个（asset_id 或下载链接），此字段同时支持base64编码的图片，示例："iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+- **aspect**：宽高比，`16:9` 或 `9:16`
+- **scene_description**：场景描述，**默认空**，仅当用户明确提到场景描述时设置（最长 200 字）
+- **subtitle_enabled**：是否启用字幕，**默认 false**
+
+### 模式专属参数
+
+**提示词模式 (prompt)**：
+- `prompt`：音乐描述提示词（必需）
+- `vocal_gender`：人声性别，`male` / `female` / `auto`（可选，默认 `auto`）
+- `instrumental`：是否纯音乐（可选，默认 false）
+
+**自定义模式 (custom)**：
+- `lyrics`：歌词内容（必需）
+- `style`：音乐风格（必需）
+- `title`：歌名（必需）
+
+**上传模式 (upload)**：
+- `music_asset_id`：已有音乐资产 ID（必需）
+
+## 执行流程（三阶段双路径）
+
+MV 生成通常需要 3-10 分钟。采用「同步等待 + Cron 兜底」双路径，确保用户一定收到结果。
+
+---
+
+### 第一步：提交任务（Phase 1，exec < 10 秒完成）
+
+**先发送消息给用户**："MV 生成中，通常 3-10 分钟，每3分钟自动报告进度，请稍候。"
+
+**提示词模式**：
+```bash
+python3 scripts/trustee_api.py start \
+  --mode prompt \
+  --aspect "16:9" \
+  --project-name "我的MV" \
+  --reference-image-url "https://..." \
+  --prompt "轻快的流行音乐，阳光沙滩风格" \
+  --vocal-gender female
+```
+
+**自定义模式**：
+```bash
+python3 scripts/trustee_api.py start \
+  --mode custom \
+  --aspect "9:16" \
+  --project-name "歌词MV" \
+  --reference-image "asset_xxx" \
+  --lyrics "Verse 1: 春天的风..." \
+  --style "pop" \
+  --title "春日之歌"
+```
+
+**上传模式**：
+```bash
+python3 scripts/trustee_api.py start \
+  --mode upload \
+  --aspect "16:9" \
+  --project-name "上传MV" \
+  --reference-image "asset_yyy" \
+  --music-asset-id "music_asset_zzz"
+```
+
+返回示例：
+```json
+{"code": 200, "status": "started", "data": {"project_id": "xxx", "log_file": "/path/logs/xxx.log"}}
+```
+
+**立即将 project_id 写入记忆**（`addMemory`）：
+```
+giggle-aimv project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
+```
+
+如果 start 失败（code != 200）：告知错误信息，询问用户是否重试，**不执行后续步骤**。
+
+---
+
+### 第二步：注册 Cron（立刻注册，在 Phase 3 之前）
+
+注册间隔 **3 分钟** 的 Cron，每次执行：
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id>
+```
+
+**Cron 处理逻辑**（根据 exit code）：
+
+| exit code | 含义 | 处理 |
+|-----------|------|------|
+| 0 | 完成/待支付/进行中 | 读 JSON：already_sent→跳过取消；signed_url→发结果取消；**pay_status=="pending"→自动支付（见下）**；else→发步骤进度，Cron 继续 |
+| 1 | 失败 | 发错误消息，取消 Cron |
+
+**自动支付流程**（`pay_status == "pending"` 时，无需询问用户）：
+
+```bash
+python3 scripts/trustee_api.py pay --project-id <project_id>
+```
+
+- 支付成功（code 200）→ 发消息："已自动支付 X 积分，MV 继续生成中。"，Cron 继续
+- 支付失败（积分不足）→ 发消息："积分不足，请充值后告诉我重试。"，**取消 Cron**
+
+**步骤进度消息格式**（从 `data.current_step` 和 `data.completed_steps` 读取）：
+```
+MV 生成中 — 已完成：音乐✓ 分镜✓ | 当前：镜头渲染 | 已用时 X 分钟
+```
+
+步骤名称翻译：
+- `music-generate` → 音乐生成
+- `storyboard` → 分镜制作
+- `shot` → 镜头渲染
+- `editor` → 剪辑合成
+
+---
+
+### 第三步：同步等待（Phase 3，乐观路径）
+
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id> --poll
+```
+
+- 返回 `status: "already_sent"` → 跳过，取消 Cron
+- 返回 `code: 200` + 含 `signed_url` → **立即发送结果给用户**，取消 Cron
+- exec 超时 → Cron 已在运行，继续等待即可
+
+---
+
+### 结果消息格式
+
+```
+MV 生成完成
+
+▶️ 在线播放：<data.signed_url>
+⏱️ 时长：<data.duration>s
+```
+
+**注意**：`data.signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击。
+
+---
+
+### 参数提取规则
+
+1. **reference_image 与 reference_image_url**：至少一个，用户提供 asset_id 用 `--reference-image`，提供图片链接或 base64 用 `--reference-image-url`
+2. **scene_description**：默认为空，**仅当用户明确提到「场景」「画面描述」「视觉风格」等时**才填充
+3. **subtitle_enabled**：默认 False，**仅当用户明确要求字幕时**用 `--subtitle`
+4. **aspect**：用户提到竖屏/9:16 时用 `9:16`，否则默认 `16:9`
+5. **模式判断**：用户说「用提示词/描述生成」→ `prompt`；「给歌词/歌词是」→ `custom`；「上传音乐/用我的音乐」→ `upload`
+
+---
+
+### 失败处理
+
+| 场景 | 处理方式 |
+|------|---------|
+| `start` 失败 | 告知错误，询问用户是否重试 |
+| 支付失败 | "积分不足，请充值后告诉我重试" |
+| 子步骤失败 | 询问用户是否重试，可用 `retry --project-id <id> --current-step <step>` |
+| 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
+
+**重试步骤**：
+```bash
+python3 scripts/trustee_api.py retry --project-id <id> --current-step shot
+# current_step 可选：music-generate / storyboard / shot / editor
+```
+
+---
+
+### Gateway 重启后恢复
+
+1. **记忆中有 project_id** → 直接执行 `query --project-id xxx`，**绝不重新 start**
+2. **两者都无** → 告知用户，询问是否重新生成
+
+### 提交任务 API 请求示例（提示词模式）
+
+提交任务接口 (`/api/v1/trustee_mode/mv/submit`) 的请求体示例：
+
+```json
+{
+  "project_id": "c0cb1f32-bb07-4449-add5-e42ccfca1ab6",
+  "music_generate_type": "prompt",
+  "prompt": "一首欢快的流行乐",
+  "vocal_gender": "female",
+  "instrumental": false,
+  "reference_image_url": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxMTEhUT...（base64 图片数据）",
+  "scene_description": "夕阳下海边漫步的浪漫场景，海浪轻轻拍打沙滩，天空呈现粉红色渐变",
+  "aspect": "16:9",
+  "subtitle_enabled": false
+}
+```
+
+说明：`reference_image`（asset_id）与 `reference_image_url`（链接或 base64）二选一。
+
+**自定义模式**：
+
+```json
+{
+  "project_id": "0ea74500-9178-4693-b581-342d5e17994c",
+  "music_generate_type": "custom",
+  "lyrics": "Verse 1:\n站在海边看夕阳\n回忆像潮水般涌来\n\nChorus:\n就让海风吹散烦恼\n在这金色时刻里\n我们找到彼此\n",
+  "style": "pop ballad",
+  "title": "海边回忆",
+  "reference_image": "is45gnvumgd",
+  "scene_description": "黄昏时分的情侣在海边散步，背影拉长，天空橙红渐变色",
+  "aspect": "9:16",
+  "subtitle_enabled": false
+}
+```
+
+**上传模式**：
+
+```json
+{
+  "project_id": "0ea74500-9178-4693-b581-342d5e17994c",
+  "music_generate_type": "upload",
+  "music_asset_id": "music_asset_789",
+  "reference_image": "is45gnvumgd",
+  "scene_description": "城市夜景，霓虹灯闪烁，车流如织，雨后的街道反射灯光",
+  "aspect": "16:9",
+  "subtitle_enabled": true
+}
+```
+
+### 查询进度 API 响应示例
+
+查询进度接口 (`/api/v1/trustee_mode/mv/query`) 的响应示例（全部完成）：
+
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "uuid": "24052352-f231-495a-9581-3827c4eb0bdf",
+  "data": {
+    "project_id": "65cf262d-c4b1-4733-abf1-ec6a7bdb944a",
+    "video_asset": {
+      "asset_id": "ryco1asdmb",
+      "download_url": "https://assets.giggle.pro/private/...",
+      "thumbnail_url": "https://assets.giggle.pro/private/...",
+      "signed_url": "https://assets.giggle.pro/private/...",
+      "duration": 0
+    },
+    "shot_count": 0,
+    "current_step": "editor",
+    "completed_steps": "music-generate,storyboard,shot,editor",
+    "pay_status": "paid",
+    "status": "completed",
+    "err_msg": "",
+    "steps": [
+      {
+        "step": "music-generate",
+        "sub_steps": [
+          {
+            "step": "GenerateMusic",
+            "status": "completed",
+            "error": "",
+            "completed_at": "2026-02-17 13:35:47"
+          },
+          {
+            "step": "GenerateMusicShot",
+            "status": "completed",
+            "error": "",
+            "completed_at": "2026-02-17 13:36:12"
+          },
+          {
+            "step": "CalculatePrice",
+            "status": "completed",
+            "error": "",
+            "completed_at": "2026-02-17 13:36:15"
+          }
+        ],
+        "retry_count": 0
+      },
+      {
+        "step": "storyboard",
+        "sub_steps": [
+          { "step": "ShotStructure", "status": "completed", "completed_at": "2026-02-17 13:36:30" },
+          { "step": "CharacterCreate", "status": "completed", "completed_at": "2026-02-17 13:37:00" },
+          { "step": "ImageGeneration", "status": "completed", "completed_at": "2026-02-17 13:38:20" }
+        ],
+        "retry_count": 0
+      },
+      {
+        "step": "shot",
+        "sub_steps": [
+          { "step": "OptimizePrompts", "status": "completed", "completed_at": "2026-02-17 13:38:45" },
+          { "step": "VideoGeneration", "status": "completed", "completed_at": "2026-02-17 13:45:00" }
+        ],
+        "retry_count": 0
+      },
+      {
+        "step": "editor",
+        "sub_steps": [
+          { "step": "ResourceDownload", "status": "completed", "completed_at": "2026-02-17 13:45:30" },
+          { "step": "IntelligentMerge", "status": "completed", "completed_at": "2026-02-17 13:46:00" }
+        ],
+        "retry_count": 0
+      }
+    ]
+  }
+}
+```
+
+说明：`pay_status` 为 `pending` 时需调用支付接口；所有 `steps` 完成后 `video_asset.download_url` 有值，可下载视频。
+
+### 支付 API 请求与响应示例
+
+支付接口 (`/api/v1/trustee_mode/mv/pay`)：
+
+**请求体**：
+```json
+{
+  "project_id": "28b4f4f7-d219-4754-a78b-d9896cd16573"
+}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "uuid": "1440ba5f-ba1c-41f6-a92c-53337a7df1c2",
+  "data": {
+    "order_id": "2a93f1c1-9e4d-4d29-89d7-15deea4e3732",
+    "price": 580
+  }
+}
+```
+
+### 重试 API 请求示例
+
+当某步骤失败时，可引导用户调用重试接口，从指定步骤重新执行：
+
+```json
+{
+  "project_id": "28b4f4f7-d219-4754-a78b-d9896cd16573",
+  "current_step": "shot"
+}
+```
+
+说明：`current_step` 为需要重试的步骤名（如 `music-generate`、`storyboard`、`shot`、`editor`）。
+
+### 返回值
+
+成功返回：
+```json
+{
+    "code": 200,
+    "msg": "success",
+    "data": {
+        "project_id": "...",
+        "download_url": "https://...",
+        "video_asset": {...},
+        "status": "completed"
+    }
+}
+```
+
+失败返回错误信息。
