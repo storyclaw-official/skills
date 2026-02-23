@@ -209,7 +209,6 @@ def load_api_key() -> str:
         for env_path in env_paths:
             if env_path.exists():
                 load_dotenv(env_path)
-                print(f"✓ 已加载配置文件: {env_path}", file=sys.stderr)
                 break
 
     api_key = os.getenv("GIGGLE_API_KEY")
@@ -295,12 +294,9 @@ def main():
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
 
-            print(f"查询任务: {args.task_id}", file=sys.stderr)
             result = client.query_task(args.task_id)
             data = result.get("data", {})
             status = data.get("status")
-
-            print(f"任务状态: {status}", file=sys.stderr)
 
             if status == TaskStatus.COMPLETED.value:
                 # 防重复：检查 .sent 文件
@@ -314,13 +310,11 @@ def main():
                 print_output(audio_list, args.json)
                 sys.exit(0)
             elif status == TaskStatus.FAILED.value:
-                print(f"任务失败: {status}", file=sys.stderr)
-                if data.get("err_msg"):
-                    print(f"错误信息: {data.get('err_msg')}", file=sys.stderr)
+                # stdout 输出供 agent 读取；exit(1) 通知 cron 停止
+                print(json.dumps({"status": "failed", "err_msg": data.get("err_msg", "未知错误"), "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(1)
             else:
-                # processing / pending → exit(2)，cron 据此判断仍在进行中
-                print(f"任务进行中: {status}", file=sys.stderr)
+                # processing / pending → exit(2)，cron 继续；不输出 stderr 避免触发 exec failed
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(2)
 

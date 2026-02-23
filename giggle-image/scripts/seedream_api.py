@@ -443,7 +443,6 @@ def main():
         for env_path in env_paths:
             if env_path.exists():
                 load_dotenv(env_path)
-                print(f"✓ 已加载配置文件: {env_path}", file=sys.stderr)
                 break
 
     # 获取API密钥（优先级：命令行 > 环境变量 > .env 文件）
@@ -467,12 +466,9 @@ def main():
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
 
-            print(f"查询任务: {args.task_id}", file=sys.stderr)
             result = client.query_task(args.task_id)
             data = result.get("data", {})
             status = data.get("status", "")
-
-            print(f"任务状态: {status}", file=sys.stderr)
 
             if status == TaskStatus.COMPLETED.value:
                 image_urls = client.extract_image_urls(result)
@@ -488,17 +484,13 @@ def main():
                 print_output(image_urls, prompt, args.json, downloaded_files)
                 # exit(0) 表示完成
             elif status in ("failed", "error"):
-                # exit(1) 表示失败
+                # stdout 输出供 agent 读取；exit(1) 通知 cron 停止；不输出 stderr
                 err_msg = data.get("err_msg", "未知错误")
-                print(f"任务失败: {err_msg}", file=sys.stderr)
-                if args.json:
-                    print(json.dumps({"status": "failed", "error": err_msg}, ensure_ascii=False))
+                print(json.dumps({"status": "failed", "error": err_msg, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(1)
             else:
-                # exit(2) 表示进行中（processing/pending），cron 继续等待
-                print(f"任务进行中: {status}", file=sys.stderr)
-                if args.json:
-                    print(json.dumps({"status": status}, ensure_ascii=False))
+                # exit(2) 表示进行中（processing/pending），cron 继续；不输出 stderr 避免触发 exec failed
+                print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(2)
 
         # 生成模式
