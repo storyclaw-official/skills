@@ -484,11 +484,20 @@ def main():
                     downloaded_files = download_images(image_urls, args.output_dir)
 
                 print_output(image_urls, prompt, args.json, downloaded_files)
-            else:
-                print(f"任务尚未完成或失败: {status}", file=sys.stderr)
-                if data.get("err_msg"):
-                    print(f"错误信息: {data.get('err_msg')}", file=sys.stderr)
+                # exit(0) 表示完成
+            elif status in ("failed", "error"):
+                # exit(1) 表示失败
+                err_msg = data.get("err_msg", "未知错误")
+                print(f"任务失败: {err_msg}", file=sys.stderr)
+                if args.json:
+                    print(json.dumps({"status": "failed", "error": err_msg}, ensure_ascii=False))
                 sys.exit(1)
+            else:
+                # exit(2) 表示进行中（processing/pending），cron 继续等待
+                print(f"任务进行中: {status}", file=sys.stderr)
+                if args.json:
+                    print(json.dumps({"status": status}, ensure_ascii=False))
+                sys.exit(2)
 
         # 生成模式
         else:
@@ -529,8 +538,8 @@ def main():
 
                 print_output(image_urls, args.prompt, args.json, downloaded_files)
             else:
-                print(f"任务ID: {task_id}", file=sys.stderr)
-                print(f"可使用以下命令查询: python {sys.argv[0]} --query --task-id {task_id}", file=sys.stderr)
+                # --no-wait 模式：输出 task_id 到 stdout，exec 可捕获
+                print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
     except Exception as e:
         print(f"✗ 错误: {e}", file=sys.stderr)

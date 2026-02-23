@@ -11,42 +11,103 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 **API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
-## 执行命令
+## 执行流程（三阶段双路径）
 
-始终使用 `--json` 获取结构化输出，从 `view_urls` 提取在线查看链接展示给用户，`urls` 为下载链接备用。
+图像生成通常需要 30-60 秒，采用「同步等待 + Cron 兜底」双路径，确保结果必达。
 
 > **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
+---
+
+### 第一步：提交任务（exec < 5 秒）
+
+**先发送消息给用户**："图像生成中，请稍候..."
+
 ```bash
-# 文生图（基础）
+# 文生图
 python3 scripts/seedream_api.py \
   --prompt "描述" \
   --aspect-ratio 16:9 \
-  --json
+  --no-wait --json
 
 # 图生图 - URL
 python3 scripts/seedream_api.py \
   --prompt "转为油画风格,保留构图" \
   --reference-images "https://example.com/photo.jpg" \
-  --json
+  --no-wait --json
 
 # 图生图 - 本地文件（自动 base64 编码）
 python3 scripts/seedream_api.py \
   --prompt "转为油画风格,保留构图" \
   --reference-images "/path/to/photo.jpg" \
-  --json
+  --no-wait --json
 
 # 多图融合（2-10张，URL 和本地文件可混用）
 python3 scripts/seedream_api.py \
   --prompt "融合这些图像的艺术风格" \
   --reference-images "url1" "/path/to/local.png" "url2" \
-  --json
+  --no-wait --json
 
 # 生成多张
 python3 scripts/seedream_api.py \
   --prompt "描述" \
   --generate-count 4 \
-  --json
+  --no-wait --json
+```
+
+返回示例：
+```json
+{"status": "started", "task_id": "xxx"}
+```
+
+**立即将 task_id 写入记忆**（`addMemory`）：
+```
+giggle-image task_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
+```
+
+如果命令失败：告知错误，询问用户是否重试，**不执行后续步骤**。
+
+---
+
+### 第二步：注册 Cron（立刻注册，在第三步之前）
+
+注册间隔 **1 分钟** 的 Cron，每次执行：
+
+```bash
+python3 scripts/seedream_api.py --query --task-id <task_id> --json
+```
+
+**Cron 处理逻辑**（根据 exit code）：
+
+| exit code | 含义 | 处理 |
+|-----------|------|------|
+| 0 | 完成 | 发送结果给用户，取消 Cron |
+| 1 | 失败 | 发错误消息，取消 Cron |
+| 2 | 进行中 | 发"图像生成中，请稍候..."，Cron 继续 |
+
+---
+
+### 第三步：同步等待（乐观路径）
+
+图像生成通常 30-60 秒，可在此步骤直接获得结果：
+
+```bash
+python3 scripts/seedream_api.py --query --task-id <task_id> --json
+```
+
+- exit(0) → **立即发送结果给用户**，取消 Cron
+- exit(2) 进行中 → 等待 30 秒后再试一次；Cron 已在运行，确保兜底
+- exit(1) 失败 → 发送错误消息，取消 Cron
+
+---
+
+## 结果展示格式
+
+```markdown
+图像生成完成：
+
+🔗 在线查看：https://view_url
+⬇️ 下载链接：https://download_url
 ```
 
 **输出字段（JSON）：**
@@ -58,15 +119,14 @@ python3 scripts/seedream_api.py \
 | `urls` | string[] | 原始下载链接（带 attachment 参数，用于下载） |
 | `imageCount` | integer | 生成的图像数量 |
 
-**展示方式**：脚本完成后，优先使用 `view_urls`，同时附上 `urls` 作为下载入口：
-
-```markdown
-![生成图像 #N](https://view_url)
-🔗 在线查看：https://view_url
-⬇️ 下载链接：https://download_url
-```
-
 如果用户明确要求保存到本地，追加 `--download` 参数重新运行，或单独运行下载命令。
+
+---
+
+## Gateway 重启后恢复
+
+1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
+2. **记忆无** → 告知用户，询问是否重新生成
 
 ---
 
@@ -131,16 +191,15 @@ multiSelect: false
 
 ### 步骤 4: 执行生成并展示
 
-1. **先发送消息给用户**："图像生成中，请稍候..."
-2. 运行命令（带 `--json`），等待完成
-3. 解析输出中的 `view_urls`（在线查看）和 `urls`（下载）数组
-4. 对每张图像，在会话中输出：
-   ```
-   ![生成图像 #N](view_url)
-   🔗 在线查看：view_url
-   ⬇️ 下载链接：download_url
-   ```
-5. 无需询问是否下载，直接展示即可
+按照「执行流程（三阶段双路径）」章节执行：先发消息 → 提交任务 → 注册 Cron → 同步等待结果。
+
+收到结果后对每张图像输出：
+```
+🔗 在线查看：view_url
+⬇️ 下载链接：download_url
+```
+
+无需询问是否下载，直接展示即可。
 
 ### 步骤 5: 反馈迭代
 
