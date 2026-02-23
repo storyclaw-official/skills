@@ -11,6 +11,8 @@ import sys
 import time
 import json
 import argparse
+import warnings
+warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 import requests
 from pathlib import Path
 from typing import Optional, Dict, Any, List

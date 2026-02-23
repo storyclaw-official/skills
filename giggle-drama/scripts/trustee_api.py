@@ -9,6 +9,8 @@ import json
 import sys
 import time
 import os
+import warnings
+warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from pathlib import Path

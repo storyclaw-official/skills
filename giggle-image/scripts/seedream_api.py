@@ -12,6 +12,8 @@ import time
 import json
 import base64
 import argparse
+import warnings
+warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 import requests
 from pathlib import Path
 from datetime import datetime
