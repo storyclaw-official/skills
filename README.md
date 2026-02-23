@@ -269,3 +269,54 @@ storyclaw-skills/
 |------|------|---------|
 | Giggle.pro | giggle.pro | giggle-drama、giggle-aimv、giggle-music、giggle-image |
 | kie.ai | kie.ai | kie-nano-banana、kie-grok-imagine |
+
+---
+
+## Skills 开发注意事项
+
+> 基于生产环境排查总结的常见问题
+
+### API Key 存放位置
+
+统一放在 `~/.openclaw/skills/.env`，不在各 skill 子目录分散存放。gateway-wrapper.sh 启动时会 `source` 此文件，所有 exec 子进程自动继承。
+
+**本地开发**时使用根目录 `.env`（即 `storyclaw-skills/.env`），脚本通过 dotenv 自动加载。
+
+### 脚本 dotenv 搜索路径
+
+脚本位于 `skills/<skill-name>/scripts/`，搜索路径**必须包含上三级**，才能定位到 `skills/.env`：
+
+```python
+env_paths = [
+    Path.cwd() / ".env",
+    Path(__file__).parent.parent / ".env",        # skill_name/.env（可能不存在）
+    Path(__file__).parent.parent.parent / ".env",  # skills/.env ← 标准位置
+]
+```
+
+只写到 `parent.parent` 会停在 skill 子目录，导致找不到 key，报"未设置 API 密钥"。
+
+### exec 禁止传 `${VAR}` 占位符
+
+SKILL.md 的 exec 命令**不要**加 `"env": {"KEY": "${KEY}"}`。OpenClaw gateway 不对 env 值做 `${VAR}` 变量替换，字面量会直接传给 API 造成认证失败。API key 已在系统 env 中，直接运行命令即可。
+
+所有 SKILL.md 执行命令章节均应加以下提示：
+
+```markdown
+> **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 API 密钥。
+> 密钥已通过系统环境变量配置，脚本自动读取，无需显式传递。
+```
+
+### 耗时任务：先发消息再执行
+
+exec 工具约 10 秒后转后台，用户在此之前看不到任何输出。对于任何需要等待的任务（图像/音乐/视频生成），在调用 exec 前必须**先发一条消息**告知用户：
+
+```
+图像生成中，请稍候...
+```
+
+```
+音乐生成中，通常 1-3 分钟，稍后自动发送结果。
+```
+
+这一条指令写在 SKILL.md 的执行步骤中，大模型会在调用 exec 之前先发送消息给用户。
