@@ -38,17 +38,17 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 ---
 
-## 执行流程（三阶段双路径）
+## 执行流程（Phase 1 提交 + Phase 2 Cron）
 
-音乐生成通常 1-3 分钟。采用「同步等待 + Cron 兜底」双路径。
+音乐生成通常 1-3 分钟。采用「快速提交 + Cron 轮询」双阶段架构。
+
+> **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
 ---
 
-### 第一步：提交任务（exec < 5 秒）
+### Phase 1：提交任务（exec < 10 秒完成）
 
 **先发送消息给用户**："音乐生成中，通常 1-3 分钟，稍后自动发送结果。"
-
-> **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
 #### A：简化模式
 ```bash
@@ -72,36 +72,40 @@ python3 scripts/giggle_music_api.py --prompt "用户描述" --instrumental --no-
 
 返回示例：
 ```json
-{"status": "started", "task_id": "xxx", "log_file": "/path/logs/xxx.log"}
+{"status": "started", "task_id": "xxx", "log_file": "/path/to/log"}
 ```
 
 **立即将 task_id 写入记忆**（`addMemory`）：
 ```
-giggle-music task_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
+giggle-music task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 ```
-
-如果命令失败：告知错误，询问用户是否重试，**不执行后续步骤**。
 
 ---
 
-### 第二步：注册 Cron（立刻注册）
+### Phase 2：注册 Cron（2 分钟间隔，wakeMode: "now"）
 
-注册间隔 **2 分钟** 的 Cron，**必须指定 `wakeMode: "now"`**（默认 `next-heartbeat` 会导致延迟不触发），每次执行：
+每次执行：
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```
 
-**Cron 处理逻辑**（所有正常情况 exit code = 0，读 stdout JSON 的 `status` 字段决定行为）：
+**Cron 处理逻辑**（根据 stdout JSON `status` 字段）：
 
-| stdout `status` | 处理 |
-|----------------|------|
-| 空输出（stdout 为空） | 已推送过，**立即取消 Cron，绝对不发任何消息**（空输出代表无操作） |
-| 音乐链接列表（非 JSON） | 发送结果给用户，**取消 Cron** |
-| `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
+| stdout JSON `status` | 处理 |
+|---------------------|------|
+| `completed`（含 `audio`） | 格式化输出歌名 + 收听链接，**取消 Cron** |
+| 空 stdout（exit 0） | 已推送过，**立即取消 Cron，不发消息** |
+| `processing` / `pending` | 不发消息，继续等待 |
+| exit(1) | 读 `err_msg` 字段，发错误消息，**取消 Cron** |
 
-exit code = 1（失败）→ 发送错误消息，取消 Cron
+---
 
-> **重要**：进行中时绝不向用户发送任何消息，静默等待即可。
+## Gateway 重启后恢复
+
+用户询问之前音乐进度时：
+
+1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
+2. **记忆无** → 告知用户，询问是否重新生成
 
 ---
 
@@ -121,25 +125,6 @@ exit code = 1（失败）→ 发送错误消息，取消 Cron
 
 ---
 
-## 失败处理
-
-| 场景 | 处理方式 |
-|------|---------|
-| `--no-wait` 命令失败 | 告知错误，询问用户是否重试 |
-| exit(1) 任务失败 | "生成失败，请修改描述后重试" |
-| 超时（> 10 分钟）| "生成超时，task_id=xxx，可稍后查询" |
-| API 不可用 | 报错 + 保存 task_id |
-
----
-
-## Gateway 重启后恢复
-
-1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
-2. **记忆无，有日志** → `ls ~/.openclaw/skills/giggle-music/logs/` 找最近 task_id，再 query
-3. **两者都无** → 告知用户，询问是否重新生成
-
----
-
 ## 参数速查
 
 | 参数 | 说明 |
@@ -150,16 +135,7 @@ exit code = 1（失败）→ 发送错误消息，取消 Cron
 | `--title` | 音乐标题（自定义模式必需） |
 | `--instrumental` | 生成纯音乐 |
 | `--vocal-gender` | 人声性别：male / female（仅自定义模式） |
-| `--no-wait` | 提交后立即返回 task_id（Phase 1 必用） |
-| `--query` | 查询任务状态（Phase 2/3 使用） |
+| `--max-wait` | 最大等待秒数（同步模式建议用 300） |
+| `--query` | 查询任务状态（手动补查时使用） |
 | `--task-id` | 任务 ID（配合 --query） |
 | `--json` | JSON 格式输出 |
-
----
-
-## exit code 说明（--query 模式）
-
-| code | 含义 |
-|------|------|
-| 0 | 正常（已完成、already_sent、或进行中）—— 具体状态看 stdout JSON `status` 字段 |
-| 1 | 失败 |

@@ -76,9 +76,8 @@ python3 scripts/trustee_api.py query --project-id <project_id>
 
 | exit code | 含义 | 处理 |
 |-----------|------|------|
-| 0 | 完成（含 already_sent） | 发结果给用户（或跳过），取消 Cron |
+| 0 | 完成/进行中 | 读 JSON：already_sent→跳过取消；signed_url→发结果取消；else→发步骤进度，Cron 继续 |
 | 1 | 失败 | 发错误消息，取消 Cron |
-| 2 | 进行中 | 发步骤进度，Cron 继续 |
 
 **步骤进度消息格式**（从 `data.current_step` 和 `data.steps` 读取）：
 ```

@@ -11,23 +11,22 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 **API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
-## 执行流程（三阶段双路径）
+## 执行流程（Phase 1 提交 + Phase 2 Cron）
 
-图像生成通常需要 30-60 秒，采用「同步等待 + Cron 兜底」双路径，确保结果必达。
+图像生成通常需要 30-60 秒。采用「快速提交 + Cron 轮询」双阶段架构。
 
 > **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
 ---
 
-### 第一步：提交任务（exec < 5 秒）
+### Phase 1：提交任务（exec < 10 秒完成）
 
-**先发送消息给用户**："图像生成中，请稍候..."
+**先发送消息给用户**："图像生成中，通常 30-60 秒，稍后自动发送结果。"
 
 ```bash
 # 文生图
 python3 scripts/seedream_api.py \
-  --prompt "描述" \
-  --aspect-ratio 16:9 \
+  --prompt "描述" --aspect-ratio 16:9 \
   --no-wait --json
 
 # 图生图 - URL
@@ -62,32 +61,35 @@ python3 scripts/seedream_api.py \
 
 **立即将 task_id 写入记忆**（`addMemory`）：
 ```
-giggle-image task_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
+giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 ```
-
-如果命令失败：告知错误，询问用户是否重试，**不执行后续步骤**。
 
 ---
 
-### 第二步：注册 Cron（立刻注册）
+### Phase 2：注册 Cron（45 秒间隔，wakeMode: "now"）
 
-注册间隔 **45 秒** 的 Cron，**必须指定 `wakeMode: "now"`**（默认 `next-heartbeat` 会导致延迟不触发），每次执行：
-
+每次执行：
 ```bash
 python3 scripts/seedream_api.py --query --task-id <task_id> --json
 ```
 
-**Cron 处理逻辑**（所有正常情况 exit code = 0，读 stdout JSON 的 `status` 字段决定行为）：
+**Cron 处理逻辑**（根据 stdout JSON `status` 字段）：
 
-| stdout `status` | 处理 |
-|----------------|------|
-| `completed` | 解析图像 URL，发送结果给用户，**取消 Cron** |
-| 空输出（stdout 为空） | 已推送过，**立即取消 Cron，绝对不发任何消息**（空输出代表无操作） |
-| `running` / `processing` / `pending` | **不发任何消息**，Cron 继续等待 |
+| stdout JSON `status` | 处理 |
+|---------------------|------|
+| `completed`（含 `view_urls`） | 每个 URL 单独一行发给用户（裸 URL），**取消 Cron** |
+| 空 stdout（exit 0） | 已推送过，**立即取消 Cron，不发消息** |
+| `processing` / `pending` / `running` | 不发消息，继续等待 |
+| exit(1) | 读 `error` 字段，发错误消息，**取消 Cron** |
 
-exit code = 1（失败）→ 发送错误消息，取消 Cron
+---
 
-> **重要**：进行中时绝不向用户发送任何消息，静默等待即可。
+## Gateway 重启后恢复
+
+用户询问之前图片进度时：
+
+1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
+2. **记忆无** → 告知用户，询问是否重新生成
 
 ---
 
@@ -114,13 +116,6 @@ exit code = 1（失败）→ 发送错误消息，取消 Cron
 
 ---
 
-## Gateway 重启后恢复
-
-1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
-2. **记忆无** → 告知用户，询问是否重新生成
-
----
-
 ## 参数速查
 
 | 参数 | 默认值 | 选项 |
@@ -131,8 +126,7 @@ exit code = 1（失败）→ 发送错误消息，取消 Cron
 | `--watermark` | false | 添加水印 |
 | `--download` | false | 自动下载到 ~/Downloads |
 | `--output-dir` | ~/Downloads | 自定义下载目录 |
-| `--no-wait` | false | 异步模式，返回 task_id 后手动 `--query` |
-| `--max-wait` | 300s | 最大等待时间 |
+| `--max-wait` | 300s | 最大等待时间（同步模式建议用 180） |
 | `--json` | false | 结构化输出，便于脚本集成 |
 
 ---
@@ -182,15 +176,9 @@ multiSelect: false
 
 ### 步骤 4: 执行生成并展示
 
-按照「执行流程（三阶段双路径）」章节执行：先发消息 → 提交任务 → 注册 Cron → 同步等待结果。
+按照「执行流程（Phase 1 提交 + Phase 2 Cron）」章节执行：先发消息 → Phase 1 提交 → 注册 Cron → Cron 轮询发结果。
 
-收到结果后对每张图像输出：
-```
-🔗 在线查看：view_url
-⬇️ 下载链接：download_url
-```
-
-无需询问是否下载，直接展示即可。
+收到结果后每张图像 URL 单独占一行发送（裸 URL，无前缀）。
 
 ### 步骤 5: 反馈迭代
 

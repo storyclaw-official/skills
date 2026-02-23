@@ -1101,13 +1101,13 @@ def main():
                 else:
                     # completed 但视频未就绪，视为进行中
                     print_response(result, args.pretty)
-                    sys.exit(2)
+                    sys.exit(0)
             elif status in ("failed", "error") or (result and result.get("code") == -1):
                 print_response(result, args.pretty)
                 sys.exit(1)  # 失败
             else:
                 print_response(result, args.pretty)
-                sys.exit(2)  # 进行中
+                sys.exit(0)  # 进行中
     
     elif args.command == 'pay':
         result = api.pay(

@@ -62,6 +62,29 @@ def _check_image_sent(task_id: str) -> bool:
 
 def _mark_image_sent(task_id: str) -> None:
     (_get_image_log_dir() / f"{task_id}.sent").touch()
+
+def _write_image_log(task_id: str, prompt: str, status: str, submitted_at: str,
+                     view_urls: Optional[List[str]] = None, error_msg: Optional[str] = None) -> None:
+    """写入任务日志文件（JSON格式）"""
+    log_dir = _get_image_log_dir()
+    safe_ts = submitted_at.replace(' ', '_').replace(':', '').replace('-', '')
+    log_file = log_dir / f"{task_id}_{safe_ts}.log"
+    log_data: Dict[str, Any] = {
+        "task_id": task_id,
+        "prompt": prompt,
+        "status": status,
+        "submitted_at": submitted_at,
+        "completed_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    if view_urls is not None:
+        log_data["view_urls"] = view_urls
+    if error_msg is not None:
+        log_data["error"] = error_msg
+    try:
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -473,6 +496,10 @@ def main():
     # 初始化客户端
     client = SeedreamAPI(api_key)
 
+    # 同步模式状态跟踪（用于异常处理时写日志）
+    task_id = None
+    submitted_at = None
+
     try:
         # 查询模式
         if args.query:
@@ -489,12 +516,14 @@ def main():
                 if _check_image_sent(args.task_id):
                     sys.exit(0)
                 image_urls = client.extract_image_urls(result)
-                prompt = args.prompt or ""
-                downloaded_files = None
-                if args.download and image_urls:
-                    downloaded_files = download_images(image_urls, args.output_dir)
                 _mark_image_sent(args.task_id)
-                print_output(image_urls, prompt, args.json, downloaded_files)
+                view_urls = [to_view_url(u) for u in image_urls]
+                # 输出含 status 字段的 JSON，agent 通过 status 判断行为
+                print(json.dumps({
+                    "status": "completed",
+                    "view_urls": view_urls,
+                    "imageCount": len(image_urls)
+                }, ensure_ascii=False))
                 sys.exit(0)
             elif status in ("failed", "error"):
                 # exit(1) 通知 cron 停止；stdout JSON 供 agent 读取
@@ -526,6 +555,7 @@ def main():
             )
 
             task_id = result.get("data", {}).get("task_id")
+            submitted_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
 
             # 等待完成
@@ -545,11 +575,34 @@ def main():
                     downloaded_files = download_images(image_urls, args.output_dir)
 
                 print_output(image_urls, args.prompt, args.json, downloaded_files)
+                # 写入任务日志
+                _write_image_log(task_id, args.prompt, "success", submitted_at,
+                                 view_urls=[to_view_url(u) for u in image_urls])
             else:
                 # --no-wait 模式：输出 task_id 到 stdout，exec 可捕获
                 print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
     except Exception as e:
+        err = str(e)
+        # 仅在同步生成模式下输出 JSON 到 stdout（方便 agent 读取错误类型）
+        if not args.query and not args.no_wait:
+            prompt = args.prompt or ''
+            if "超时" in err or "timeout" in err.lower():
+                print(json.dumps({
+                    "status": "timeout",
+                    "prompt": prompt,
+                    "message": f"图像生成超时（{args.max_wait}秒），请重新生成"
+                }, ensure_ascii=False))
+                if task_id and submitted_at:
+                    _write_image_log(task_id, prompt, "timeout", submitted_at, error_msg=err)
+            else:
+                print(json.dumps({
+                    "status": "error",
+                    "prompt": prompt,
+                    "message": err
+                }, ensure_ascii=False))
+                if task_id and submitted_at:
+                    _write_image_log(task_id, prompt, "error", submitted_at, error_msg=err)
         print(f"✗ 错误: {e}", file=sys.stderr)
         sys.exit(1)
 

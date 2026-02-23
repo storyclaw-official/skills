@@ -15,6 +15,7 @@ import warnings
 warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 import requests
 from pathlib import Path
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
@@ -197,6 +198,30 @@ def _mark_music_sent(task_id: str) -> None:
     sent_file.touch()
 
 
+def _write_music_log(task_id: str, prompt: str, status: str, submitted_at: str,
+                     audio_list: Optional[List[Dict[str, str]]] = None, error_msg: Optional[str] = None) -> None:
+    """写入任务日志文件（JSON格式）"""
+    log_dir = _get_music_log_dir()
+    safe_ts = submitted_at.replace(' ', '_').replace(':', '').replace('-', '')
+    log_file = log_dir / f"{task_id}_{safe_ts}.log"
+    log_data: Dict[str, Any] = {
+        "task_id": task_id,
+        "prompt": prompt,
+        "status": status,
+        "submitted_at": submitted_at,
+        "completed_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    if audio_list is not None:
+        log_data["audio_urls"] = [a.get("audioUrl", "") for a in audio_list]
+    if error_msg is not None:
+        log_data["error"] = error_msg
+    try:
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 def load_api_key() -> str:
     """从 .env 文件加载 API 密钥"""
     if DOTENV_AVAILABLE:
@@ -287,6 +312,10 @@ def main():
     api_key = load_api_key()
     client = GiggleMusicAPI(api_key)
 
+    # 同步模式状态跟踪（用于异常处理时写日志）
+    task_id = None
+    submitted_at = None
+
     try:
         # 查询模式
         if args.query:
@@ -303,10 +332,11 @@ def main():
                 if _check_music_sent(args.task_id):
                     sys.exit(0)
                 audio_list = client.extract_audio_urls(result)
-                print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
-                # 标记已推送
                 _mark_music_sent(args.task_id)
-                print_output(audio_list, args.json)
+                print(json.dumps({
+                    "status": "completed",
+                    "audio": [{"title": a["title"], "audioUrl": a["audioUrl"]} for a in audio_list]
+                }, ensure_ascii=False))
                 sys.exit(0)
             elif status == TaskStatus.FAILED.value:
                 # stdout 输出供 agent 读取；exit(1) 通知 cron 停止
@@ -343,6 +373,7 @@ def main():
 
             result = client.custom_generate(**kwargs)
             task_id = result.get("data", {}).get("task_id")
+            submitted_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
 
             if not args.no_wait:
@@ -355,6 +386,8 @@ def main():
                 audio_list = client.extract_audio_urls(final_result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
                 print_output(audio_list, args.json)
+                # 写入任务日志
+                _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
             else:
                 # 输出到 stdout，exec 可读取 task_id
                 log_file = _setup_music_log(task_id)
@@ -374,6 +407,7 @@ def main():
             )
 
             task_id = result.get("data", {}).get("task_id")
+            submitted_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
 
             if not args.no_wait:
@@ -386,12 +420,34 @@ def main():
                 audio_list = client.extract_audio_urls(final_result)
                 print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
                 print_output(audio_list, args.json)
+                # 写入任务日志
+                _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
             else:
                 # 输出到 stdout，exec 可读取 task_id
                 log_file = _setup_music_log(task_id)
                 print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
 
     except Exception as e:
+        err = str(e)
+        # 仅在同步生成模式下输出 JSON 到 stdout（方便 agent 读取错误类型）
+        if not args.query and not args.no_wait:
+            prompt = args.prompt or ''
+            if "超时" in err or "timeout" in err.lower():
+                print(json.dumps({
+                    "status": "timeout",
+                    "prompt": prompt,
+                    "message": f"音乐生成超时（{args.max_wait}秒），请重新生成"
+                }, ensure_ascii=False))
+                if task_id and submitted_at:
+                    _write_music_log(task_id, prompt, "timeout", submitted_at, error_msg=err)
+            else:
+                print(json.dumps({
+                    "status": "error",
+                    "prompt": prompt,
+                    "message": err
+                }, ensure_ascii=False))
+                if task_id and submitted_at:
+                    _write_music_log(task_id, prompt, "error", submitted_at, error_msg=err)
         print(f"✗ 错误: {e}", file=sys.stderr)
         sys.exit(1)
 

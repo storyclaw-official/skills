@@ -749,13 +749,13 @@ def main():
                 else:
                     # completed 但视频未就绪，视为进行中
                     print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
-                    sys.exit(2)
+                    sys.exit(0)
             elif status in ("failed", "error") or (r and r.get("code") == -1):
                 print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
                 sys.exit(1)  # 失败
             else:
                 print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
-                sys.exit(2)  # 进行中
+                sys.exit(0)  # 进行中
 
     elif args.command == "pay":
         r = api.pay(args.project_id)
