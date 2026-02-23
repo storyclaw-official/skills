@@ -233,3 +233,4 @@ addMemory: "giggle-music task_id: xxx（状态：生成中，提交时间：YYYY
 | 2026-02-23 | Kimi 模型自动补充 exec env 导致认证失败 | gateway exec 不做 `${VAR}` 变量替换，字面量直传 API | SKILL.md 加禁止说明，删除 env 参数 |
 | 2026-02-23 | giggle-image 生成期间无任何用户反馈 | SKILL.md 缺少"先发消息"指令 | 步骤 4 加入先发消息指令 |
 | 2026-02-23 | giggle-image 生成完成但结果不返回用户 | exec 10 秒转后台，同步等待结果丢失；`--no-wait` task_id 输出到 stderr；`--query` 进行中与失败同为 exit(1) | 改为三阶段双路径；`--no-wait` 改 stdout JSON；`--query` 新增 exit(2) 表示进行中 |
+| 2026-02-23 | giggle-drama / giggle-aimv 单次 query 无 exit code 区分 | `trustee_api.py query`（无 `--poll`）所有情况均 exit(0)，Cron 无法区分完成/失败/进行中 | 补充 exit code：完成→exit(0)，失败→exit(1)，进行中→exit(2)；SKILL.md cron 处理表改为 exit code 风格 |

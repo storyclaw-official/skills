@@ -72,14 +72,13 @@ giggle-drama project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH
 python3 scripts/trustee_api.py query --project-id <project_id>
 ```
 
-**Cron 处理逻辑**（根据返回结果）：
+**Cron 处理逻辑**（根据 exit code）：
 
-| 返回状态 | 处理 |
-|---------|------|
-| `status: "already_sent"` | 跳过，取消 Cron |
-| `code: 200` + 含 `signed_url` | 发送结果给用户，取消 Cron |
-| `status: "failed"` / `code: -1` 且含 `err_msg` | 发错误消息给用户，取消 Cron |
-| 其他（进行中） | 发步骤进度，Cron 继续 |
+| exit code | 含义 | 处理 |
+|-----------|------|------|
+| 0 | 完成（含 already_sent） | 发结果给用户（或跳过），取消 Cron |
+| 1 | 失败 | 发错误消息，取消 Cron |
+| 2 | 进行中 | 发步骤进度，Cron 继续 |
 
 **步骤进度消息格式**（从 `data.current_step` 和 `data.steps` 读取）：
 ```

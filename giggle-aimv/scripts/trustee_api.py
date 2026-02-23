@@ -742,7 +742,18 @@ def main():
                         r = {"code": 200, "status": "already_sent", "msg": "结果已推送，跳过重复发送", "data": {"project_id": args.project_id}}
                     else:
                         api._mark_sent(args.project_id)
-            print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
+                    print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
+                    # exit(0) 隐式：完成或已发送
+                else:
+                    # completed 但视频未就绪，视为进行中
+                    print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
+                    sys.exit(2)
+            elif status in ("failed", "error") or (r and r.get("code") == -1):
+                print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
+                sys.exit(1)  # 失败
+            else:
+                print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
+                sys.exit(2)  # 进行中
 
     elif args.command == "pay":
         r = api.pay(args.project_id)
