@@ -84,7 +84,29 @@ giggle-music task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 ### Phase 2：注册 Cron（2 分钟间隔，wakeMode: "now"）
 
-每次执行：
+使用 `cron` 工具注册轮询任务，**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
+
+```json
+{
+  "action": "add",
+  "job": {
+    "name": "giggle-music-<task_id前8位>",
+    "schedule": {
+      "kind": "every",
+      "everyMs": 120000
+    },
+    "payload": {
+      "kind": "systemEvent",
+      "text": "音乐任务轮询：请执行 exec python3 scripts/giggle_music_api.py --query --task-id <完整task_id>，根据 Cron 处理逻辑处理 stdout 输出。"
+    },
+    "sessionTarget": "main"
+  }
+}
+```
+
+**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
+
+每次 Cron 触发后执行：
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```

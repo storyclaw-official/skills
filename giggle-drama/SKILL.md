@@ -107,7 +107,29 @@ giggle-drama project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH
 
 **目的**：兜底路径，无论 Phase 3 是否成功，Cron 保证用户收到结果。
 
-注册间隔 **3 分钟** 的 Cron，每次执行：
+使用 `cron` 工具注册轮询任务，**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
+
+```json
+{
+  "action": "add",
+  "job": {
+    "name": "giggle-drama-<project_id前8位>",
+    "schedule": {
+      "kind": "every",
+      "everyMs": 180000
+    },
+    "payload": {
+      "kind": "systemEvent",
+      "text": "视频任务轮询：请执行 exec python3 scripts/trustee_api.py query --project-id <完整project_id>，根据 Cron 处理逻辑处理结果。"
+    },
+    "sessionTarget": "main"
+  }
+}
+```
+
+**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
+
+每次 Cron 触发后执行：
 ```bash
 python3 scripts/trustee_api.py query --project-id <project_id>
 ```

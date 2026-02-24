@@ -63,6 +63,31 @@ def _check_image_sent(task_id: str) -> bool:
 def _mark_image_sent(task_id: str) -> None:
     (_get_image_log_dir() / f"{task_id}.sent").touch()
 
+def _save_task_prompt(task_id: str, prompt: str) -> None:
+    """保存任务提示词，供 --query 模式读取并展示给用户"""
+    try:
+        (_get_image_log_dir() / f"{task_id}.prompt").write_text(prompt, encoding='utf-8')
+    except Exception:
+        pass
+
+def _load_task_prompt(task_id: str, truncate: bool = True) -> Optional[str]:
+    """读取任务提示词
+
+    Args:
+        task_id: 任务 ID
+        truncate: True 返回截断显示文本（最多 20 字符），False 返回完整提示词
+    """
+    try:
+        prompt_file = _get_image_log_dir() / f"{task_id}.prompt"
+        if prompt_file.exists():
+            prompt = prompt_file.read_text(encoding='utf-8').strip()
+            if truncate:
+                return prompt[:20] + "..." if len(prompt) > 20 else prompt
+            return prompt
+    except Exception:
+        pass
+    return None
+
 def _write_image_log(task_id: str, prompt: str, status: str, submitted_at: str,
                      view_urls: Optional[List[str]] = None, error_msg: Optional[str] = None) -> None:
     """写入任务日志文件（JSON格式）"""
@@ -437,10 +462,12 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False, 
     view_urls = [to_view_url(u) for u in image_urls]
 
     if output_json:
+        # 预格式化 Markdown 链接，避免 agent 提取裸 URL
+        display_lines = [f"👉 [查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
+        display = "\n".join(display_lines)
         output_data = {
             "prompt": prompt,
-            "urls": image_urls,        # 原始下载 URL（带 response-content-disposition=attachment）
-            "view_urls": view_urls,    # 在线查看 URL（浏览器直接显示图像）
+            "display": display,        # 预格式化 Markdown 链接，agent 应直接发送此内容
             "imageCount": len(image_urls)
         }
         if downloaded_files:
@@ -509,7 +536,14 @@ def main():
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
 
-            result = client.query_task(args.task_id)
+            try:
+                result = client.query_task(args.task_id)
+            except Exception as e:
+                # 网络异常等：输出 JSON（含 status 字段）+ exit(0)
+                # 这样 Cron 处理逻辑会识别为"进行中"，继续下次轮询，不会误取消
+                print(json.dumps({"status": "network_error", "task_id": args.task_id}, ensure_ascii=False))
+                print(f"网络异常: {e}", file=sys.stderr)
+                sys.exit(0)
             data = result.get("data", {})
             status = data.get("status", "")
 
@@ -518,20 +552,55 @@ def main():
                 if _check_image_sent(args.task_id):
                     sys.exit(0)
                 image_urls = client.extract_image_urls(result)
+                if not image_urls:
+                    # API 返回 completed 但无图片 URL，输出友好错误消息，exit(0) 避免 exec failed
+                    prompt_text = _load_task_prompt(args.task_id) or "图片"
+                    log_prompt = _load_task_prompt(args.task_id, truncate=False) or "unknown"
+                    _write_image_log(args.task_id, log_prompt, "empty_urls",
+                                     datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                     error_msg="completed but no image urls")
+                    print(f"😔 生成遇到了问题\n\n关于「{prompt_text}」的创作虽已完成但未返回图片。\n\n💡 建议重新生成试试，我随时待命~")
+                    sys.exit(0)
                 _mark_image_sent(args.task_id)
                 view_urls = [to_view_url(u) for u in image_urls]
-                # 输出含 status 字段的 JSON，agent 通过 status 判断行为
-                print(json.dumps({
-                    "status": "completed",
-                    "view_urls": view_urls,
-                    "imageCount": len(image_urls)
-                }, ensure_ascii=False))
+                # 输出完整的用户友好消息（含 emoji + prompt 上下文 + Markdown 链接）
+                # Agent 只需原封不动转发，不添加任何前缀
+                prompt_text = _load_task_prompt(args.task_id) or "图片"
+                view_count = len(view_urls)
+                display_lines = [f"👉 [查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
+                print("🎨 图片已就绪！\n")
+                if view_count > 1:
+                    print(f"关于「{prompt_text}」的创作已完成，共 {view_count} 张 ✨\n")
+                else:
+                    print(f"关于「{prompt_text}」的创作已完成 ✨\n")
+                print("\n".join(display_lines))
+                print("\n如需调整，随时告诉我~")
+                # 写入任务日志
+                log_prompt = _load_task_prompt(args.task_id, truncate=False) or "unknown"
+                _write_image_log(args.task_id, log_prompt, "success",
+                                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                 view_urls=view_urls)
                 sys.exit(0)
             elif status in ("failed", "error"):
-                # exit(1) 通知 cron 停止；stdout JSON 供 agent 读取
+                # 输出用户友好的纯文本错误消息，exit(0) 避免 OpenClaw 触发 "exec failed" 展示
                 err_msg = data.get("err_msg", "未知错误")
-                print(json.dumps({"status": "failed", "error": err_msg, "task_id": args.task_id}, ensure_ascii=False))
-                sys.exit(1)
+                # err_msg 可能是嵌套 JSON 字符串，尝试提取 message 字段
+                try:
+                    err_obj = json.loads(err_msg) if isinstance(err_msg, str) and err_msg.startswith("{") else None
+                    if err_obj and "message" in err_obj:
+                        err_msg = err_obj["message"]
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                # 将英文错误消息翻译为中文
+                if "sensitive information" in str(err_msg).lower():
+                    err_msg = "输入内容可能包含敏感信息，被服务端拦截"
+                prompt_text = _load_task_prompt(args.task_id) or "图片"
+                log_prompt = _load_task_prompt(args.task_id, truncate=False) or "unknown"
+                _write_image_log(args.task_id, log_prompt, "failed",
+                                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                 error_msg=err_msg)
+                print(f"😔 生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{err_msg}\n\n💡 建议调整描述后重新尝试，我随时待命~")
+                sys.exit(0)
             else:
                 # 进行中（running/processing/pending）→ exit(0) 避免 exec failed 通知
                 # agent 通过 JSON status 字段判断是否继续 cron，不发用户消息
@@ -581,7 +650,8 @@ def main():
                 _write_image_log(task_id, args.prompt, "success", submitted_at,
                                  view_urls=[to_view_url(u) for u in image_urls])
             else:
-                # --no-wait 模式：输出 task_id 到 stdout，exec 可捕获
+                # --no-wait 模式：保存 prompt 供 query 时展示，输出 task_id 到 stdout
+                _save_task_prompt(task_id, args.prompt)
                 print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
     except Exception as e:

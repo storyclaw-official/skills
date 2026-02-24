@@ -5,7 +5,7 @@ user-invocable: true
 metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🖼️","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
-# Generating Images With Seedream
+# Generating Images With Seedream (v5 - 2026-02-24)
 
 使用 Seedream 模型（seedream45）通过 giggle.pro 平台生成 AI 图像。
 
@@ -66,53 +66,91 @@ giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 ---
 
-### Phase 2：注册 Cron（45 秒间隔，wakeMode: "now"）
+### Phase 2：注册 Cron（45 秒间隔）
 
-每次执行：
-```bash
-python3 scripts/seedream_api.py --query --task-id <task_id> --json
+使用 `cron` 工具注册轮询任务。**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
+
+```json
+{
+  "action": "add",
+  "job": {
+    "name": "giggle-image-<task_id前8位>",
+    "schedule": {
+      "kind": "every",
+      "everyMs": 45000
+    },
+    "payload": {
+      "kind": "systemEvent",
+      "text": "图片任务轮询：请执行 exec python3 scripts/seedream_api.py --query --task-id <完整task_id>，根据 Cron 处理逻辑处理 stdout 输出。如果 stdout 是非 JSON 纯文本，将其发送给用户并取消此 Cron。如果 stdout 是 JSON，不发消息继续等待。如果 stdout 为空，直接取消此 Cron。"
+    },
+    "sessionTarget": "main"
+  }
+}
 ```
 
-**Cron 处理逻辑**（根据 stdout JSON `status` 字段）：
+**参数约束（违反任何一条都会导致 Cron 注册失败）**：
+- `name`：**必填**，字符串
+- `schedule.kind`：**必须**为 `"every"`（定时轮询）
+- `payload.kind`：**必须**为 `"systemEvent"`
+- `payload` 中**只能有** `kind` 和 `text` 两个字段
+- `sessionTarget`：**必须**为 `"main"`
+- **禁止**在 payload 中放 `message`、`model`、`timeoutSeconds`、`contextMessages` 等字段
 
-| stdout JSON `status` | 处理 |
-|---------------------|------|
-| `completed`（含 `view_urls`） | 每个 URL 单独一行发给用户（裸 URL），**取消 Cron** |
-| 空 stdout（exit 0） | 已推送过，**立即取消 Cron，不发消息** |
-| `processing` / `pending` / `running` | 不发消息，继续等待 |
-| exit(1) | 读 `error` 字段，发错误消息，**取消 Cron** |
+注册成功后，Cron 每 45 秒向 Agent 发送一条系统事件。Agent 收到后执行查询命令。
+
+**Cron 触发后的处理逻辑**（根据 exec 的 stdout 内容判断，所有路径均 exit 0）：
+
+| stdout 特征 | 处理 |
+|------------|------|
+| 非空纯文本（不以 `{` 开头） | **将 stdout 原封不动发送给用户**（禁止添加任何前缀或修改），**取消 Cron**（使用 `cron` 工具 `action: "remove"`） |
+| 空 stdout | 已推送过，**立即取消 Cron，不发消息** |
+| JSON（以 `{` 开头，含 `"status"` 字段） | 不发消息，不取消 Cron，继续等待下次轮询 |
+
+> **极其重要**：stdout 中的 Markdown 链接（`[查看图片 N](...)`）**必须原封不动保留**，禁止提取 URL、禁止改写链接格式、禁止发送裸 URL。
+
+**如果 Cron 注册失败**：等待 60 秒后手动执行一次查询命令 `python3 scripts/seedream_api.py --query --task-id <task_id>`，根据上述处理逻辑处理结果。
 
 ---
 
-## Gateway 重启后恢复
+## 新请求 vs 查询旧任务（重要区分）
 
-用户询问之前图片进度时：
+**用户发起新的图片生成请求时**（如"帮我生成一张XX图片"、"画一张XX"），**必须执行 Phase 1 提交新任务**，不得复用记忆中的旧 task_id。每次新的生成请求都是全新的任务。
 
-1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
+**仅当用户明确询问之前任务的进度时**（如"我上次的图片好了吗"、"之前那张图怎么样了"），才查询记忆中的旧 task_id：
+1. **记忆中有 task_id** → 执行 `--query --task-id xxx`
 2. **记忆无** → 告知用户，询问是否重新生成
 
 ---
 
 ## 结果展示格式
 
-收到完成结果后，**只发 view_urls**，每张图像 URL 单独占一行，不加任何前缀文字（🔗、⬇️、"在线查看"等均不需要）：
+脚本在任务完成时输出用户友好的纯文本消息（非 JSON）：
 
+**成功示例**：
 ```
-{view_urls[0]}
-{view_urls[1]}
-...
+🎨 图片已就绪！
+
+关于「美丽的校园风景」的创作已完成 ✨
+
+👉 [查看图片 1](https://assets.giggle.pro/...)
+
+如需调整，随时告诉我~
 ```
 
-> 裸 URL 单行发送，飞书可自动渲染为图片预览卡片。不发 urls（下载链接），用户需要下载时可直接长按/右键图片保存。
+**失败示例**：
+```
+😔 生成遇到了问题
 
-**输出字段（JSON）：**
+关于「美丽的校园风景」的创作未能完成：输入内容可能包含敏感信息，被服务端拦截
 
-| 字段 | 类型 | 说明 |
-|-----|------|------|
-| `prompt` | string | 图像描述提示词 |
-| `view_urls` | string[] | 在线查看链接（浏览器直接显示图像，**用这个**） |
-| `urls` | string[] | 原始下载链接（带 attachment 参数，不需要发给用户） |
-| `imageCount` | integer | 生成的图像数量 |
+💡 建议调整描述后重新尝试，我随时待命~
+```
+
+**转发规则**：
+- stdout 已包含完整的上下文描述（含用户的提示词），**禁止**在前面添加任何文字
+- **必须原封不动转发 stdout**，不添加、不删除、不改写
+- 禁止提取括号中的 URL 单独展示
+- 禁止发送裸 URL（飞书会截断含 `_` 的 URL）
 
 ---
 
@@ -178,7 +216,7 @@ multiSelect: false
 
 按照「执行流程（Phase 1 提交 + Phase 2 Cron）」章节执行：先发消息 → Phase 1 提交 → 注册 Cron → Cron 轮询发结果。
 
-收到结果后每张图像 URL 单独占一行发送（裸 URL，无前缀）。
+收到结果后将 exec 返回的 stdout 原封不动发给用户。
 
 ### 步骤 5: 反馈迭代
 
