@@ -195,7 +195,7 @@ python3 scripts/trustee_api.py query --project-id <project_id> --poll
 |------|---------|
 | `start` 失败 | 告知错误，询问用户是否重试 |
 | 支付失败（msg 含"积分"） | "积分不足，请充值后告诉我重试" |
-| 子步骤失败 | 告知步骤名和错误信息，询问用户是否重新生成（重新 start） |
+| 子步骤失败 | 告知步骤名和错误信息，询问用户是否重新生成。确认后执行 `start`（唯一重试方式，API 不支持断点续传）：`python3 scripts/trustee_api.py start --story "..." --aspect "..." --project-name "..."` |
 | 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
 | 视频下载失败 | 提供 `signed_url`，"可直接在浏览器打开" |
 
