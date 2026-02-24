@@ -758,7 +758,7 @@ def main():
                 sys.exit(0)
 
             r = api.query_progress(args.project_id)
-            data = r.get("data", {}) if r else {}
+            data = (r.get("data") or {}) if r else {}
             status = data.get("status", "")
             # 自动支付：价格算出来后 pay_status 变 pending，直接付款无需 agent 介入
             pay_status = data.get("pay_status", "")

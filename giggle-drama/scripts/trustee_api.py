@@ -1103,7 +1103,7 @@ def main():
 
             result = api.query_progress(args.project_id)
             # 单次查询也加 .sent 防重复
-            data = result.get("data", {}) if result else {}
+            data = (result.get("data") or {}) if result else {}
             status = data.get("status", "")
             # 自动支付：价格算出来后 pay_status 变 pending，直接付款无需 agent 介入
             pay_status = data.get("pay_status", "")
