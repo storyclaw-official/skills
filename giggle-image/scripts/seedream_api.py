@@ -70,6 +70,21 @@ def _save_task_prompt(task_id: str, prompt: str) -> None:
     except Exception:
         pass
 
+def _get_query_count(task_id: str) -> int:
+    """获取 --query 轮询次数"""
+    f = _get_image_log_dir() / f"{task_id}.count"
+    try:
+        return int(f.read_text().strip()) if f.exists() else 0
+    except Exception:
+        return 0
+
+def _increment_query_count(task_id: str) -> int:
+    """递增并返回 --query 轮询次数"""
+    f = _get_image_log_dir() / f"{task_id}.count"
+    count = _get_query_count(task_id) + 1
+    f.write_text(str(count))
+    return count
+
 def _load_task_prompt(task_id: str, truncate: bool = True) -> Optional[str]:
     """读取任务提示词
 
@@ -535,6 +550,13 @@ def main():
             if not args.task_id:
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
+
+            # 超时兜底：最多轮询 10 次（约 5 分钟），超时输出纯文本触发 Cron 取消
+            count = _increment_query_count(args.task_id)
+            if count > 10:
+                prompt_text = _load_task_prompt(args.task_id) or "图片"
+                print(f"⏰ 图片生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
+                sys.exit(0)
 
             try:
                 result = client.query_task(args.task_id)

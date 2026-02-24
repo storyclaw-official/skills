@@ -79,6 +79,21 @@ class MVTrusteeAPI:
         """标记已推送结果"""
         (self._get_log_dir() / f"{project_id}.sent").touch()
 
+    def _get_query_count(self, project_id: str) -> int:
+        """获取单次 query 轮询次数"""
+        f = self._get_log_dir() / f"{project_id}.count"
+        try:
+            return int(f.read_text().strip()) if f.exists() else 0
+        except Exception:
+            return 0
+
+    def _increment_query_count(self, project_id: str) -> int:
+        """递增并返回单次 query 轮询次数"""
+        f = self._get_log_dir() / f"{project_id}.count"
+        count = self._get_query_count(project_id) + 1
+        f.write_text(str(count))
+        return count
+
     def create_project(self, name: str, aspect: str) -> Dict[str, Any]:
         """创建 MV 项目"""
         url = f"{self.base_url}/api/v1/project/create"
@@ -736,6 +751,12 @@ def main():
                 sys.exit(1)
         else:
             # 单次查询（供 Cron 使用）
+            # 超时兜底：最多轮询 15 次（约 45 分钟），超时输出纯文本触发 Cron 取消
+            count = api._increment_query_count(args.project_id)
+            if count > 15:
+                print("⏰ MV 生成超时\n\n已等待超过 45 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
+                sys.exit(0)
+
             r = api.query_progress(args.project_id)
             data = r.get("data", {}) if r else {}
             status = data.get("status", "")

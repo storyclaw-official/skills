@@ -2,7 +2,7 @@
 name: giggle-music
 description: 使用 giggle.pro 平台生成 AI 音乐。当用户需要创建、生成或创作音乐时使用此技能。支持根据文本描述生成音乐、创作带歌词的歌曲、生成纯音乐/背景音乐、自定义音乐风格和人声性别。触发关键词：生成音乐、创作歌曲、写歌、AI 作曲、音乐创作。
 user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎶","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/requirements.txt"]},"version":"2.0.0","author":"姜式伙伴"}
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎶","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/requirements.txt"]},"version":"3.0.0","author":"姜式伙伴"}
 ---
 
 # Giggle Music
@@ -97,28 +97,25 @@ giggle-music task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
     },
     "payload": {
       "kind": "systemEvent",
-      "text": "音乐任务轮询：请执行 exec python3 scripts/giggle_music_api.py --query --task-id <完整task_id>，根据 Cron 处理逻辑处理 stdout 输出。"
+      "text": "音乐任务轮询：请执行 exec python3 scripts/giggle_music_api.py --query --task-id <完整task_id>，根据 Cron 处理逻辑处理 stdout 输出。如果 stdout 是非 JSON 纯文本，将其发送给用户并取消此 Cron。如果 stdout 是 JSON，不发消息继续等待。如果 stdout 为空，直接取消此 Cron。"
     },
     "sessionTarget": "main"
   }
 }
 ```
 
-**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
-
 每次 Cron 触发后执行：
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```
 
-**Cron 处理逻辑**（根据 stdout JSON `status` 字段）：
+**Cron 触发后的处理逻辑**（根据 exec 的 stdout 内容判断，所有路径均 exit 0）：
 
-| stdout JSON `status` | 处理 |
-|---------------------|------|
-| `completed`（含 `audio`） | 格式化输出歌名 + 收听链接，**取消 Cron** |
-| 空 stdout（exit 0） | 已推送过，**立即取消 Cron，不发消息** |
-| `processing` / `pending` | 不发消息，继续等待 |
-| exit(1) | 读 `err_msg` 字段，发错误消息，**取消 Cron** |
+| stdout 特征 | 处理 |
+|------------|------|
+| 非空纯文本（不以 `{` 开头） | **将 stdout 原封不动发送给用户**（禁止添加任何前缀或修改），**取消 Cron** |
+| 空 stdout | 已推送过，**立即取消 Cron，不发消息** |
+| JSON（以 `{` 开头，含 `"status"` 字段） | 不发消息，不取消 Cron，继续等待下次轮询 |
 
 ---
 
@@ -128,22 +125,6 @@ python3 scripts/giggle_music_api.py --query --task-id <task_id>
 
 1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
 2. **记忆无** → 告知用户，询问是否重新生成
-
----
-
-## 结果消息格式
-
-收到完成结果后，发送以下格式的消息：
-
-```
-音乐生成完成，共 N 首：
-
-1. 🎵 music_1
-   收听：<audioUrl>
-
-2. 🎵 music_2
-   收听：<audioUrl>
-```
 
 ---
 
@@ -157,7 +138,5 @@ python3 scripts/giggle_music_api.py --query --task-id <task_id>
 | `--title` | 音乐标题（自定义模式必需） |
 | `--instrumental` | 生成纯音乐 |
 | `--vocal-gender` | 人声性别：male / female（仅自定义模式） |
-| `--max-wait` | 最大等待秒数（同步模式建议用 300） |
-| `--query` | 查询任务状态（手动补查时使用） |
+| `--query` | 查询任务状态（Cron 轮询和手动补查使用） |
 | `--task-id` | 任务 ID（配合 --query） |
-| `--json` | JSON 格式输出 |

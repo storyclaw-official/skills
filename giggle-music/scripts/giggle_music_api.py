@@ -200,6 +200,43 @@ def _mark_music_sent(task_id: str) -> None:
     sent_file.touch()
 
 
+def _save_music_prompt(task_id: str, prompt: str) -> None:
+    """保存任务提示词，供 --query 模式读取并展示给用户"""
+    try:
+        (_get_music_log_dir() / f"{task_id}.prompt").write_text(prompt, encoding='utf-8')
+    except Exception:
+        pass
+
+
+def _load_music_prompt(task_id: str) -> Optional[str]:
+    """读取任务提示词（截断到20字）"""
+    try:
+        prompt_file = _get_music_log_dir() / f"{task_id}.prompt"
+        if prompt_file.exists():
+            prompt = prompt_file.read_text(encoding='utf-8').strip()
+            return prompt[:20] + "..." if len(prompt) > 20 else prompt
+    except Exception:
+        pass
+    return None
+
+
+def _get_query_count(task_id: str) -> int:
+    """获取 --query 轮询次数"""
+    f = _get_music_log_dir() / f"{task_id}.count"
+    try:
+        return int(f.read_text().strip()) if f.exists() else 0
+    except Exception:
+        return 0
+
+
+def _increment_query_count(task_id: str) -> int:
+    """递增并返回 --query 轮询次数"""
+    f = _get_music_log_dir() / f"{task_id}.count"
+    count = _get_query_count(task_id) + 1
+    f.write_text(str(count))
+    return count
+
+
 def _write_music_log(task_id: str, prompt: str, status: str, submitted_at: str,
                      audio_list: Optional[List[Dict[str, str]]] = None, error_msg: Optional[str] = None) -> None:
     """写入任务日志文件（JSON格式）"""
@@ -325,6 +362,13 @@ def main():
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
 
+            # 超时兜底：最多轮询 5 次（约 10 分钟），超时输出纯文本触发 Cron 取消
+            count = _increment_query_count(args.task_id)
+            if count > 5:
+                prompt_text = _load_music_prompt(args.task_id) or "音乐"
+                print(f"⏰ 音乐生成超时\n\n关于「{prompt_text}」的创作已等待超过 10 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
+                sys.exit(0)
+
             result = client.query_task(args.task_id)
             data = result.get("data", {})
             status = data.get("status")
@@ -335,18 +379,21 @@ def main():
                     sys.exit(0)
                 audio_list = client.extract_audio_urls(result)
                 _mark_music_sent(args.task_id)
-                print(json.dumps({
-                    "status": "completed",
-                    "audio": [{"title": a["title"], "audioUrl": a["audioUrl"]} for a in audio_list]
-                }, ensure_ascii=False))
+                prompt_text = _load_music_prompt(args.task_id) or "音乐"
+                count_songs = len(audio_list)
+                lines = [f"🎵 [{a['title']}]({a['audioUrl']})" for a in audio_list]
+                print(f"🎶 音乐已就绪！\n\n关于「{prompt_text}」的创作已完成，共 {count_songs} 首 ✨\n")
+                print("\n".join(lines))
+                print("\n如需调整，随时告诉我~")
                 sys.exit(0)
             elif status == TaskStatus.FAILED.value:
-                # stdout 输出供 agent 读取；exit(1) 通知 cron 停止
-                print(json.dumps({"status": "failed", "err_msg": data.get("err_msg", "未知错误"), "task_id": args.task_id}, ensure_ascii=False))
-                sys.exit(1)
+                # 纯文本输出，exit(0) 避免 exec failed 通知，Cron 判断非 JSON → 取消
+                prompt_text = _load_music_prompt(args.task_id) or "音乐"
+                print(f"😔 音乐生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{data.get('err_msg', '未知错误')}\n\n💡 建议调整描述后重新尝试，我随时待命~")
+                sys.exit(0)
             else:
-                # 进行中（processing/pending）→ exit(0) 避免 exec failed 通知
-                # agent 通过 JSON status 字段判断是否继续 cron，不发用户消息
+                # 进行中（processing/pending）→ JSON 输出，exit(0) 避免 exec failed 通知
+                # Cron 判断是 JSON → 不发消息，继续等待
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(0)
 
@@ -391,7 +438,8 @@ def main():
                 # 写入任务日志
                 _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
             else:
-                # 输出到 stdout，exec 可读取 task_id
+                # 保存 prompt 供 --query 时展示，输出到 stdout，exec 可读取 task_id
+                _save_music_prompt(task_id, args.prompt or '')
                 log_file = _setup_music_log(task_id)
                 print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
 
@@ -425,7 +473,8 @@ def main():
                 # 写入任务日志
                 _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
             else:
-                # 输出到 stdout，exec 可读取 task_id
+                # 保存 prompt 供 --query 时展示，输出到 stdout，exec 可读取 task_id
+                _save_music_prompt(task_id, args.prompt or '')
                 log_file = _setup_music_log(task_id)
                 print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
 

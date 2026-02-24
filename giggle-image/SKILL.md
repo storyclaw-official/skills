@@ -88,14 +88,6 @@ giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 }
 ```
 
-**参数约束（违反任何一条都会导致 Cron 注册失败）**：
-- `name`：**必填**，字符串
-- `schedule.kind`：**必须**为 `"every"`（定时轮询）
-- `payload.kind`：**必须**为 `"systemEvent"`
-- `payload` 中**只能有** `kind` 和 `text` 两个字段
-- `sessionTarget`：**必须**为 `"main"`
-- **禁止**在 payload 中放 `message`、`model`、`timeoutSeconds`、`contextMessages` 等字段
-
 注册成功后，Cron 每 45 秒向 Agent 发送一条系统事件。Agent 收到后执行查询命令。
 
 **Cron 触发后的处理逻辑**（根据 exec 的 stdout 内容判断，所有路径均 exit 0）：
@@ -218,26 +210,4 @@ multiSelect: false
 
 收到结果后将 exec 返回的 stdout 原封不动发给用户。
 
-### 步骤 5: 反馈迭代
-
-```
-问题: "图像已生成！您对结果满意吗?"
-header: "结果评估"
-选项:
-- "满意，已完成"
-- "需要调整提示词重新生成"
-- "需要更改比例"
-- "需要添加/更改参考图"
-multiSelect: false
-```
-
-根据反馈返回对应步骤重新生成。
-
 > 如用户希望保存图像到本地，可追加 `--download` 参数重新执行，或告知用户点击完整链接自行保存。
-
----
-
-## 执行前检查
-
-- [ ] `echo $GIGGLE_API_KEY` 或检查 `.env` 文件是否已配置
-- [ ] 参考图（如有）URL 可公开访问，数量 ≤ 10

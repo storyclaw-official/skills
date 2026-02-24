@@ -95,6 +95,21 @@ class TrusteeModeAPI:
         sent_file = self._get_log_dir() / f"{project_id}.sent"
         sent_file.touch()
 
+    def _get_query_count(self, project_id: str) -> int:
+        """获取单次 query 轮询次数"""
+        f = self._get_log_dir() / f"{project_id}.count"
+        try:
+            return int(f.read_text().strip()) if f.exists() else 0
+        except Exception:
+            return 0
+
+    def _increment_query_count(self, project_id: str) -> int:
+        """递增并返回单次 query 轮询次数"""
+        f = self._get_log_dir() / f"{project_id}.count"
+        count = self._get_query_count(project_id) + 1
+        f.write_text(str(count))
+        return count
+
     def create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
         创建项目
@@ -1080,6 +1095,12 @@ def main():
                 sys.exit(1)
         else:
             # 单次查询（供 cron 使用）
+            # 超时兜底：最多轮询 20 次（约 60 分钟），超时输出纯文本触发 Cron 取消
+            count = api._increment_query_count(args.project_id)
+            if count > 20:
+                print("⏰ 视频生成超时\n\n已等待超过 60 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
+                sys.exit(0)
+
             result = api.query_progress(args.project_id)
             # 单次查询也加 .sent 防重复
             data = result.get("data", {}) if result else {}

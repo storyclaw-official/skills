@@ -150,8 +150,6 @@ giggle-aimv project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:
 }
 ```
 
-**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
-
 每次 Cron 触发后执行：
 ```bash
 python3 scripts/trustee_api.py query --project-id <project_id>
