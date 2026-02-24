@@ -45,7 +45,7 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 - 国风水墨（传统水墨插画）
 - 交给系统自动选择
 
-用户回复后，**重复确认一遍生成参数**，然后执行提交任务。
+用户回复后，**重复确认一遍生成参数**，然后执行 Phase 1。
 
 ## 可用视频风格
 
@@ -63,15 +63,15 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 ---
 
-## 执行流程（后台守护进程自动交付）
+## 执行流程（三阶段双路径）
 
-视频生成通常需要 10-30 分钟。提交任务后，脚本自动 fork 后台守护进程轮询进度、自动支付、下载视频并写入交付文件，**无需 Cron、无需 agent 介入**。
+视频生成通常需要 10-30 分钟。采用「同步等待 + Cron 兜底」双路径，确保用户一定收到结果。
 
 ---
 
-### 第一步：提交任务（exec < 10 秒完成）
+### 第一步：提交任务（Phase 1，exec < 10 秒完成）
 
-**先发送消息给用户**："视频生成已启动，通常 10-30 分钟完成，届时会自动通知你结果，请耐心等待。"
+**先发送消息给用户**："视频生成中，通常 10-30 分钟，每3分钟自动报告进度，请耐心等待。"
 
 ```bash
 python3 scripts/trustee_api.py start \
@@ -103,57 +103,91 @@ giggle-drama project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH
 
 ---
 
-### 第二步：后台自动处理（无需 agent 操作）
+### 第二步：注册 Cron（立刻注册，在 Phase 3 之前）
 
-`start` 命令成功后，脚本已自动 fork 后台守护进程，执行以下流程：
+**目的**：兜底路径，无论 Phase 3 是否成功，Cron 保证用户收到结果。
 
-1. **每 60 秒**轮询一次任务进度
-2. 检测到 `pay_status=="pending"` 时**自动支付**（使用默认模型组合）
-3. 任务完成后**自动下载视频**到本地
-4. 将结果写入 `.delivery` 文件
-5. 最长等待 **40 分钟**，超时自动终止
+使用 `cron` 工具注册轮询任务，**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
 
-**无需注册 Cron，无需同步等待，提交任务后告知用户等待即可。**
+```json
+{
+  "action": "add",
+  "job": {
+    "name": "giggle-drama-<project_id前8位>",
+    "schedule": {
+      "kind": "every",
+      "everyMs": 180000
+    },
+    "payload": {
+      "kind": "systemEvent",
+      "text": "视频任务轮询：请执行 exec python3 scripts/trustee_api.py query --project-id <完整project_id>，根据 Cron 处理逻辑处理结果。"
+    },
+    "sessionTarget": "main"
+  }
+}
+```
+
+**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
+
+每次 Cron 触发后执行：
+```bash
+python3 scripts/trustee_api.py query --project-id <project_id>
+```
+
+**Cron 处理逻辑**（根据 exit code）：
+
+| exit code | 含义 | 处理 |
+|-----------|------|------|
+| 0 | 完成/支付中/进行中 | 读 JSON：already_sent→跳过取消；signed_url→发结果取消；pay_failed→发"积分不足"取消；msg 含"自动支付"→转发消息 Cron 继续；else→发步骤进度，Cron 继续 |
+| 1 | 失败/积分不足 | 发错误消息，取消 Cron |
+
+> **说明**：支付逻辑已内置于 `query` 脚本，检测到 `pay_status=="pending"` 时自动调用 pay API，**无需 agent 介入**。
+
+**步骤进度消息格式**（从 `data.current_step` 和 `data.steps` 读取）：
+```
+视频渲染中 — 已完成：剧本✓ 角色✓ 分镜✓ 镜头图✓ | 已用时 X 分钟
+```
+
+步骤名称翻译：
+- `script` → 剧本生成
+- `character` → 角色设计
+- `storyboard` → 分镜制作
+- `shot` → 镜头图渲染
+- `video` → 视频渲染
 
 ---
 
-### 第三步：检查交付结果（用户主动询问时使用）
+### 第三步：同步等待（Phase 3，乐观路径）
 
-当用户询问视频进度时，执行：
+**目的**：如果视频较快完成（< LLM 超时），直接在此步骤返回结果。
 
 ```bash
-python3 scripts/trustee_api.py check-delivery --project-id <project_id>
+python3 scripts/trustee_api.py query --project-id <project_id> --poll
 ```
 
-**输出说明**：
+**处理逻辑**：
 
-| 输出内容 | 含义 | 处理 |
-|---------|------|------|
-| 完整的结果消息（含播放链接） | 视频已完成 | 直接转发给用户 |
-| `⏳ 视频生成中...` | 仍在处理 | 告知用户继续等待 |
-| `❓ 未找到项目...` | 无记录 | 确认 project_id 是否正确 |
+- 返回 `status: "already_sent"` → 跳过（Cron 已发送），取消 Cron
+- 返回 `code: 200` + 含 `signed_url` → **立即发送结果给用户**，取消 Cron
+- exec 超时/失败 → Cron 已在运行，继续等待即可
 
 ---
 
 ## 结果消息格式
 
-视频完成后，`.delivery` 文件中的内容格式如下，**直接转发给用户**：
+收到完成结果后，发送以下格式的消息：
 
 ```
-🎬 视频生成完成！
+视频生成完成
 
-关于「故事内容」的创作已完成 ✨
-
-▶️ 在线播放：<signed_url>
-⏱️ 时长：Xs | 分镜：N 个
-📁 本地：<local_path>
-
-如需调整，随时告诉我~
+▶️ 在线播放：<data.signed_url>
+⏱️ 时长：<data.duration>s | 分镜：<data.shot_count> 个
+📁 本地：<data.local_path>（如下载失败则无此行）
 ```
 
 **说明**：
-- `signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击
-- 如果视频下载失败，无本地路径行，提示用户可直接用链接在浏览器播放
+- `data.signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击
+- 如果 `data.download_failed == true`，则无本地路径，提示用户可直接用 `data.signed_url` 在浏览器播放
 
 ---
 
@@ -162,9 +196,9 @@ python3 scripts/trustee_api.py check-delivery --project-id <project_id>
 | 场景 | 处理方式 |
 |------|---------|
 | `start` 失败 | 告知错误，询问用户是否重试 |
-| 支付失败（积分不足） | `.delivery` 文件含"积分不足"提示，转发给用户 |
-| 子步骤失败 | `.delivery` 文件含步骤名和错误信息，转发给用户 |
-| 超时（40分钟） | `.delivery` 文件含超时提示和 project_id |
+| 支付失败（msg 含"积分"） | "积分不足，请充值后告诉我重试" |
+| 子步骤失败 | 告知步骤名和错误信息，询问用户是否重新生成（重新 start） |
+| 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
 | 视频下载失败 | 提供 `signed_url`，"可直接在浏览器打开" |
 
 ---
@@ -173,8 +207,8 @@ python3 scripts/trustee_api.py check-delivery --project-id <project_id>
 
 用户询问之前视频进度时：
 
-1. **记忆中有 project_id** → 执行 `check-delivery --project-id xxx` 检查交付状态，**绝不重新 start**
-2. **记忆无，有日志** → `ls ~/.openclaw/skills/giggle-drama/logs/` 找最近的 `.delivery` 或 `.status` 文件，提取 project_id 再查询
+1. **记忆中有 project_id** → 直接执行 `query --project-id xxx`，**绝不重新 start**
+2. **记忆无，有日志** → `ls ~/.openclaw/skills/giggle-drama/logs/` 找最近 project_id，再 query
 3. **两者都无** → 告知用户，询问是否重新生成
 
 ---

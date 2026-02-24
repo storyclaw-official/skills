@@ -5,23 +5,23 @@ user-invocable: true
 metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🖼️","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
-# Generating Images With Seedream (v6 - 后台守护进程交付)
+# Generating Images With Seedream (v5 - 2026-02-24)
 
 使用 Seedream 模型（seedream45）通过 giggle.pro 平台生成 AI 图像。
 
 **API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
-## 执行流程（提交 + 后台自动交付）
+## 执行流程（Phase 1 提交 + Phase 2 Cron）
 
-图像生成通常需要 30-60 秒。采用「快速提交 + 后台守护进程自动交付」架构，**无需注册 Cron**。
+图像生成通常需要 30-60 秒。采用「快速提交 + Cron 轮询」双阶段架构。
 
 > **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
 ---
 
-### 提交任务（exec < 10 秒完成）
+### Phase 1：提交任务（exec < 10 秒完成）
 
-**先发送消息给用户**："图像生成中，通常 30-60 秒，完成后自动通知结果。"
+**先发送消息给用户**："图像生成中，通常 30-60 秒，稍后自动发送结果。"
 
 ```bash
 # 文生图
@@ -59,8 +59,6 @@ python3 scripts/seedream_api.py \
 {"status": "started", "task_id": "xxx"}
 ```
 
-**收到 `{"status": "started"}` 后，不需要做任何轮询操作**。脚本已自动启动后台守护进程，会自行轮询 API、写入结果文件、超时自动退出。
-
 **立即将 task_id 写入记忆**（`addMemory`）：
 ```
 giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
@@ -68,39 +66,65 @@ giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 ---
 
-### 查询交付状态（用户主动询问时使用）
+### Phase 2：注册 Cron（45 秒间隔）
 
-当用户问"图片好了吗"、"上次的图怎么样了"时，使用 `--check-delivery` 查询：
+使用 `cron` 工具注册轮询任务。**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
 
-```bash
-python3 scripts/seedream_api.py --check-delivery --task-id <完整task_id>
+```json
+{
+  "action": "add",
+  "job": {
+    "name": "giggle-image-<task_id前8位>",
+    "schedule": {
+      "kind": "every",
+      "everyMs": 45000
+    },
+    "payload": {
+      "kind": "systemEvent",
+      "text": "图片任务轮询：请执行 exec python3 scripts/seedream_api.py --query --task-id <完整task_id>，根据 Cron 处理逻辑处理 stdout 输出。如果 stdout 是非 JSON 纯文本，将其发送给用户并取消此 Cron。如果 stdout 是 JSON，不发消息继续等待。如果 stdout 为空，直接取消此 Cron。"
+    },
+    "sessionTarget": "main"
+  }
+}
 ```
 
-**输出说明**：
+**参数约束（违反任何一条都会导致 Cron 注册失败）**：
+- `name`：**必填**，字符串
+- `schedule.kind`：**必须**为 `"every"`（定时轮询）
+- `payload.kind`：**必须**为 `"systemEvent"`
+- `payload` 中**只能有** `kind` 和 `text` 两个字段
+- `sessionTarget`：**必须**为 `"main"`
+- **禁止**在 payload 中放 `message`、`model`、`timeoutSeconds`、`contextMessages` 等字段
 
-| stdout 特征 | 含义 | 处理 |
-|------------|------|------|
-| 非空纯文本（含 emoji） | 任务已完成/失败/超时 | **原封不动转发给用户** |
-| `⏳ 图片生成中...` | 仍在后台轮询 | 转发给用户，告知请稍候 |
-| `❓ 未找到任务...` | 无状态信息 | 告知用户，询问是否重新生成 |
+注册成功后，Cron 每 45 秒向 Agent 发送一条系统事件。Agent 收到后执行查询命令。
+
+**Cron 触发后的处理逻辑**（根据 exec 的 stdout 内容判断，所有路径均 exit 0）：
+
+| stdout 特征 | 处理 |
+|------------|------|
+| 非空纯文本（不以 `{` 开头） | **将 stdout 原封不动发送给用户**（禁止添加任何前缀或修改），**取消 Cron**（使用 `cron` 工具 `action: "remove"`） |
+| 空 stdout | 已推送过，**立即取消 Cron，不发消息** |
+| JSON（以 `{` 开头，含 `"status"` 字段） | 不发消息，不取消 Cron，继续等待下次轮询 |
 
 > **极其重要**：stdout 中的 Markdown 链接（`[查看图片 N](...)`）**必须原封不动保留**，禁止提取 URL、禁止改写链接格式、禁止发送裸 URL。
+
+**如果 Cron 注册失败**：等待 60 秒后手动执行一次查询命令 `python3 scripts/seedream_api.py --query --task-id <task_id>`，根据上述处理逻辑处理结果。
 
 ---
 
 ## 新请求 vs 查询旧任务（重要区分）
 
-**用户发起新的图片生成请求时**（如"帮我生成一张XX图片"、"画一张XX"），**必须执行提交新任务**，不得复用记忆中的旧 task_id。每次新的生成请求都是全新的任务。
+**用户发起新的图片生成请求时**（如"帮我生成一张XX图片"、"画一张XX"），**必须执行 Phase 1 提交新任务**，不得复用记忆中的旧 task_id。每次新的生成请求都是全新的任务。
 
 **仅当用户明确询问之前任务的进度时**（如"我上次的图片好了吗"、"之前那张图怎么样了"），才查询记忆中的旧 task_id：
-1. **记忆中有 task_id** → 执行 `--check-delivery --task-id xxx`
+1. **记忆中有 task_id** → 执行 `--query --task-id xxx`
 2. **记忆无** → 告知用户，询问是否重新生成
 
 ---
 
 ## 结果展示格式
 
-后台守护进程在任务完成时自动写入 `.delivery` 文件，`--check-delivery` 读取后输出用户友好的纯文本消息（非 JSON）：
+脚本在任务完成时输出用户友好的纯文本消息（非 JSON）：
 
 **成功示例**：
 ```
@@ -190,9 +214,9 @@ multiSelect: false
 
 ### 步骤 4: 执行生成并展示
 
-按照「执行流程」章节执行：先发消息 → 提交任务 → 后台自动交付。
+按照「执行流程（Phase 1 提交 + Phase 2 Cron）」章节执行：先发消息 → Phase 1 提交 → 注册 Cron → Cron 轮询发结果。
 
-用户询问结果时使用 `--check-delivery` 查询，将 stdout 原封不动发给用户。
+收到结果后将 exec 返回的 stdout 原封不动发给用户。
 
 ### 步骤 5: 反馈迭代
 

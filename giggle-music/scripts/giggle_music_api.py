@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 import requests
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
@@ -224,166 +224,6 @@ def _write_music_log(task_id: str, prompt: str, status: str, submitted_at: str,
         pass
 
 
-def _save_music_prompt(task_id: str, prompt: str) -> None:
-    """保存任务提示词"""
-    try:
-        (_get_music_log_dir() / f"{task_id}.prompt").write_text(prompt, encoding='utf-8')
-    except Exception:
-        pass
-
-def _load_music_prompt(task_id: str, truncate: bool = True) -> Optional[str]:
-    """读取任务提示词"""
-    try:
-        prompt_file = _get_music_log_dir() / f"{task_id}.prompt"
-        if prompt_file.exists():
-            prompt = prompt_file.read_text(encoding='utf-8').strip()
-            if truncate:
-                return prompt[:20] + "..." if len(prompt) > 20 else prompt
-            return prompt
-    except Exception:
-        pass
-    return None
-
-def _write_status(task_id: str, poll_count: int, started_at: datetime,
-                  timeout_at: datetime, pid: int) -> None:
-    """写入实时状态文件"""
-    status_file = _get_music_log_dir() / f"{task_id}.status"
-    status_data = {
-        "task_id": task_id,
-        "status": "polling",
-        "poll_count": poll_count,
-        "started_at": started_at.strftime('%Y-%m-%dT%H:%M:%S'),
-        "last_poll": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        "timeout_at": timeout_at.strftime('%Y-%m-%dT%H:%M:%S'),
-        "pid": pid
-    }
-    try:
-        status_file.write_text(json.dumps(status_data, ensure_ascii=False), encoding='utf-8')
-    except Exception:
-        pass
-
-def _write_delivery(task_id: str, text: str) -> None:
-    """写入最终交付文件"""
-    delivery_file = _get_music_log_dir() / f"{task_id}.delivery"
-    try:
-        delivery_file.write_text(text, encoding='utf-8')
-    except Exception:
-        pass
-
-def _cleanup_daemon_files(task_id: str) -> None:
-    """清理守护进程临时文件"""
-    log_dir = _get_music_log_dir()
-    for suffix in ('.pid', '.status'):
-        f = log_dir / f"{task_id}{suffix}"
-        try:
-            f.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-def _start_background_daemon(task_id: str, prompt: str, max_wait: int = 300, poll_interval: int = 15) -> None:
-    """fork 后台守护进程"""
-    import subprocess
-    _save_music_prompt(task_id, prompt)
-    daemon_cmd = [
-        sys.executable, os.path.abspath(__file__),
-        "--daemon", "--task-id", task_id,
-        "--max-wait", str(max_wait),
-        "--poll-interval", str(poll_interval)
-    ]
-    proc = subprocess.Popen(
-        daemon_cmd,
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL
-    )
-    pid_file = _get_music_log_dir() / f"{task_id}.pid"
-    pid_file.write_text(str(proc.pid))
-
-def _run_daemon(task_id: str, max_wait: int, poll_interval: int) -> None:
-    """后台守护进程主循环"""
-    if DOTENV_AVAILABLE:
-        env_paths = [
-            Path(__file__).parent.parent / ".env",
-            Path(__file__).parent.parent.parent / ".env",
-        ]
-        for env_path in env_paths:
-            if env_path.exists():
-                load_dotenv(env_path)
-                break
-
-    api_key = os.getenv("GIGGLE_API_KEY")
-    if not api_key:
-        _write_delivery(task_id, "❌ 守护进程错误：未找到 GIGGLE_API_KEY 环境变量")
-        _cleanup_daemon_files(task_id)
-        return
-
-    client = GiggleMusicAPI(api_key)
-    started_at = datetime.now()
-    timeout_at = started_at + timedelta(seconds=max_wait)
-    poll_count = 0
-    pid = os.getpid()
-    prompt_text = _load_music_prompt(task_id) or "音乐"
-
-    while datetime.now() < timeout_at:
-        poll_count += 1
-        _write_status(task_id, poll_count, started_at, timeout_at, pid)
-
-        try:
-            result = client.query_task(task_id)
-        except Exception:
-            time.sleep(poll_interval)
-            continue
-
-        data = result.get("data", {})
-        status = data.get("status")
-
-        if status == TaskStatus.COMPLETED.value:
-            if _check_music_sent(task_id):
-                _cleanup_daemon_files(task_id)
-                return
-            audio_list = client.extract_audio_urls(result)
-            _mark_music_sent(task_id)
-            # 构建用户友好消息
-            parts = [f"🎵 音乐生成完成！\n"]
-            parts.append(f"关于「{prompt_text}」的创作已完成，共 {len(audio_list)} 首 ✨\n")
-            for i, a in enumerate(audio_list, 1):
-                parts.append(f"{i}. 🎵 {a.get('title', f'music_{i}')}")
-                parts.append(f"   收听：{a.get('audioUrl', '')}")
-            parts.append("\n如需调整，随时告诉我~")
-            delivery = "\n".join(parts)
-            _write_delivery(task_id, delivery)
-            log_prompt = _load_music_prompt(task_id, truncate=False) or "unknown"
-            _write_music_log(task_id, log_prompt, "success",
-                             started_at.strftime('%Y-%m-%d %H:%M:%S'),
-                             audio_list=audio_list)
-            _cleanup_daemon_files(task_id)
-            return
-
-        if status == TaskStatus.FAILED.value:
-            err_msg = data.get("err_msg", "未知错误")
-            delivery = (f"😔 音乐生成遇到了问题\n\n"
-                        f"关于「{prompt_text}」的创作未能完成：{err_msg}\n\n"
-                        f"💡 建议调整描述后重新尝试，我随时待命~")
-            _write_delivery(task_id, delivery)
-            log_prompt = _load_music_prompt(task_id, truncate=False) or "unknown"
-            _write_music_log(task_id, log_prompt, "failed",
-                             started_at.strftime('%Y-%m-%d %H:%M:%S'),
-                             error_msg=err_msg)
-            _cleanup_daemon_files(task_id)
-            return
-
-        time.sleep(poll_interval)
-
-    # 超时
-    elapsed = max_wait // 60
-    delivery = (f"⏰ 音乐生成超时\n\n"
-                f"关于「{prompt_text}」的创作已等待 {elapsed} 分钟仍未完成。\n\n"
-                f"💡 请稍后重试，或联系管理员检查服务状态。")
-    _write_delivery(task_id, delivery)
-    _cleanup_daemon_files(task_id)
-
-
 def load_api_key() -> str:
     """从 .env 文件加载 API 密钥"""
     if DOTENV_AVAILABLE:
@@ -450,12 +290,6 @@ def parse_args():
     # 输出参数
     parser.add_argument('--json', action='store_true', help='JSON格式输出')
 
-    # 后台守护进程参数（内部使用）
-    parser.add_argument('--daemon', action='store_true',
-                       help='后台守护进程模式（内部使用）')
-    parser.add_argument('--check-delivery', action='store_true',
-                       help='检查任务交付状态')
-
     return parser.parse_args()
 
 
@@ -477,36 +311,6 @@ def print_output(audio_list: List[Dict[str, Any]], output_json: bool = False):
 def main():
     """主函数"""
     args = parse_args()
-
-    # 守护进程模式
-    if args.daemon:
-        if not args.task_id:
-            sys.exit(1)
-        _run_daemon(args.task_id, args.max_wait, args.poll_interval)
-        sys.exit(0)
-
-    # 检查交付状态
-    if args.check_delivery:
-        if not args.task_id:
-            print("错误: 需要提供 --task-id 参数", file=sys.stderr)
-            sys.exit(1)
-        log_dir = _get_music_log_dir()
-        delivery_file = log_dir / f"{args.task_id}.delivery"
-        status_file = log_dir / f"{args.task_id}.status"
-        if delivery_file.exists():
-            print(delivery_file.read_text(encoding='utf-8'))
-        elif status_file.exists():
-            try:
-                status_data = json.loads(status_file.read_text(encoding='utf-8'))
-                started = datetime.fromisoformat(status_data.get("started_at", ""))
-                elapsed = int((datetime.now() - started).total_seconds())
-                print(f"⏳ 音乐生成中，已等待 {elapsed} 秒，已轮询 {status_data.get('poll_count', 0)} 次...")
-            except Exception:
-                print("⏳ 音乐生成中，请稍候...")
-        else:
-            print(f"❓ 未找到任务 {args.task_id} 的状态信息")
-        sys.exit(0)
-
     api_key = load_api_key()
     client = GiggleMusicAPI(api_key)
 
@@ -587,10 +391,9 @@ def main():
                 # 写入任务日志
                 _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
             else:
-                # --no-wait 模式：输出 task_id，自动启动后台守护进程
+                # 输出到 stdout，exec 可读取 task_id
                 log_file = _setup_music_log(task_id)
                 print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
-                _start_background_daemon(task_id, args.prompt or '', max_wait=300, poll_interval=15)
 
         # 简化模式（默认）
         else:
@@ -622,10 +425,9 @@ def main():
                 # 写入任务日志
                 _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
             else:
-                # --no-wait 模式：输出 task_id，自动启动后台守护进程
+                # 输出到 stdout，exec 可读取 task_id
                 log_file = _setup_music_log(task_id)
                 print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
-                _start_background_daemon(task_id, args.prompt or '', max_wait=300, poll_interval=15)
 
     except Exception as e:
         err = str(e)
