@@ -2,18 +2,14 @@
 name: giggle-music
 description: 使用 giggle.pro 平台生成 AI 音乐。当用户需要创建、生成或创作音乐时使用此技能。支持根据文本描述生成音乐、创作带歌词的歌曲、生成纯音乐/背景音乐、自定义音乐风格和人声性别。触发关键词：生成音乐、创作歌曲、写歌、AI 作曲、音乐创作。
 user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎶","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/requirements.txt"]},"version":"2.0.0","author":"姜式伙伴"}
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎶","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/requirements.txt"]},"version":"3.0.0","author":"姜式伙伴"}
 ---
 
-# Giggle Music
+# Giggle Music (v3 - 后台守护进程交付)
 
 通过 giggle.pro 平台生成 AI 音乐，支持简化模式和自定义模式。
 
-## 环境配置
-
-在项目根目录 `.env` 文件中配置 `GIGGLE_API_KEY`。详见 [SETUP.md](SETUP.md)。
-
----
+**API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
 ## 交互式引导
 
@@ -38,17 +34,17 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 ---
 
-## 执行流程（Phase 1 提交 + Phase 2 Cron）
+## 执行流程（提交 + 后台自动交付）
 
-音乐生成通常 1-3 分钟。采用「快速提交 + Cron 轮询」双阶段架构。
+音乐生成通常 1-3 分钟。采用「快速提交 + 后台守护进程自动交付」架构，**无需注册 Cron**。
 
 > **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
 ---
 
-### Phase 1：提交任务（exec < 10 秒完成）
+### 提交任务（exec < 10 秒完成）
 
-**先发送消息给用户**："音乐生成中，通常 1-3 分钟，稍后自动发送结果。"
+**先发送消息给用户**："音乐生成中，通常 1-3 分钟，完成后自动通知结果。"
 
 #### A：简化模式
 ```bash
@@ -75,6 +71,8 @@ python3 scripts/giggle_music_api.py --prompt "用户描述" --instrumental --no-
 {"status": "started", "task_id": "xxx", "log_file": "/path/to/log"}
 ```
 
+**收到 `{"status": "started"}` 后，不需要做任何轮询操作**。脚本已自动启动后台守护进程，会自行轮询 API、写入结果文件、超时自动退出。
+
 **立即将 task_id 写入记忆**（`addMemory`）：
 ```
 giggle-music task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
@@ -82,68 +80,66 @@ giggle-music task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 ---
 
-### Phase 2：注册 Cron（2 分钟间隔，wakeMode: "now"）
+### 查询交付状态（用户主动询问时使用）
 
-使用 `cron` 工具注册轮询任务，**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
+当用户问"音乐好了吗"、"上次的歌怎么样了"时，使用 `--check-delivery` 查询：
 
-```json
-{
-  "action": "add",
-  "job": {
-    "name": "giggle-music-<task_id前8位>",
-    "schedule": {
-      "kind": "every",
-      "everyMs": 120000
-    },
-    "payload": {
-      "kind": "systemEvent",
-      "text": "音乐任务轮询：请执行 exec python3 scripts/giggle_music_api.py --query --task-id <完整task_id>，根据 Cron 处理逻辑处理 stdout 输出。"
-    },
-    "sessionTarget": "main"
-  }
-}
-```
-
-**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
-
-每次 Cron 触发后执行：
 ```bash
-python3 scripts/giggle_music_api.py --query --task-id <task_id>
+python3 scripts/giggle_music_api.py --check-delivery --task-id <完整task_id>
 ```
 
-**Cron 处理逻辑**（根据 stdout JSON `status` 字段）：
+**输出说明**：
 
-| stdout JSON `status` | 处理 |
-|---------------------|------|
-| `completed`（含 `audio`） | 格式化输出歌名 + 收听链接，**取消 Cron** |
-| 空 stdout（exit 0） | 已推送过，**立即取消 Cron，不发消息** |
-| `processing` / `pending` | 不发消息，继续等待 |
-| exit(1) | 读 `err_msg` 字段，发错误消息，**取消 Cron** |
+| stdout 特征 | 含义 | 处理 |
+|------------|------|------|
+| 非空纯文本（含 emoji） | 任务已完成/失败/超时 | **原封不动转发给用户** |
+| `⏳ 音乐生成中...` | 仍在后台轮询 | 转发给用户，告知请稍候 |
+| `❓ 未找到任务...` | 无状态信息 | 告知用户，询问是否重新生成 |
+
+> **极其重要**：stdout 中的内容**必须原封不动转发给用户**，禁止改写、禁止添加前缀。
 
 ---
 
-## Gateway 重启后恢复
+## 新请求 vs 查询旧任务（重要区分）
 
-用户询问之前音乐进度时：
+**用户发起新的音乐生成请求时**（如"帮我生成一首XX歌曲"、"写一首XX"），**必须执行提交新任务**，不得复用记忆中的旧 task_id。每次新的生成请求都是全新的任务。
 
-1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**绝不重新提交**
+**仅当用户明确询问之前任务的进度时**（如"我上次的音乐好了吗"、"之前那首歌怎么样了"），才查询记忆中的旧 task_id：
+1. **记忆中有 task_id** → 执行 `--check-delivery --task-id xxx`
 2. **记忆无** → 告知用户，询问是否重新生成
 
 ---
 
-## 结果消息格式
+## 结果展示格式
 
-收到完成结果后，发送以下格式的消息：
+后台守护进程在任务完成时自动写入 `.delivery` 文件，`--check-delivery` 读取后输出用户友好的纯文本消息（非 JSON）：
 
+**成功示例**：
 ```
-音乐生成完成，共 N 首：
+🎵 音乐生成完成！
+
+关于「女声，1分钟，古风爱情」的创作已完成，共 2 首 ✨
 
 1. 🎵 music_1
    收听：<audioUrl>
-
 2. 🎵 music_2
    收听：<audioUrl>
+
+如需调整，随时告诉我~
 ```
+
+**失败示例**：
+```
+😔 音乐生成遇到了问题
+
+关于「女声，1分钟，古风爱情」的创作未能完成：未知错误
+
+💡 建议调整描述后重新尝试，我随时待命~
+```
+
+**转发规则**：
+- stdout 已包含完整的上下文描述（含用户的提示词），**禁止**在前面添加任何文字
+- **必须原封不动转发 stdout**，不添加、不删除、不改写
 
 ---
 
@@ -157,7 +153,9 @@ python3 scripts/giggle_music_api.py --query --task-id <task_id>
 | `--title` | 音乐标题（自定义模式必需） |
 | `--instrumental` | 生成纯音乐 |
 | `--vocal-gender` | 人声性别：male / female（仅自定义模式） |
-| `--max-wait` | 最大等待秒数（同步模式建议用 300） |
-| `--query` | 查询任务状态（手动补查时使用） |
-| `--task-id` | 任务 ID（配合 --query） |
+| `--no-wait` | 提交后立即返回，启动后台守护进程 |
+| `--check-delivery` | 检查任务交付状态（配合 --task-id） |
+| `--query` | 查询任务原始状态（手动补查时使用） |
+| `--task-id` | 任务 ID |
+| `--max-wait` | 最大等待秒数（默认 300） |
 | `--json` | JSON 格式输出 |

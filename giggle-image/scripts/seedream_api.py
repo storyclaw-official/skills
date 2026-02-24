@@ -16,7 +16,7 @@ import warnings
 warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 import requests
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
@@ -110,6 +110,164 @@ def _write_image_log(task_id: str, prompt: str, status: str, submitted_at: str,
             json.dump(log_data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+# ── 后台守护进程（daemon）文件通信 ──────────────────────────────────────────────
+def _write_status(task_id: str, poll_count: int, started_at: datetime,
+                  timeout_at: datetime, pid: int) -> None:
+    """写入实时状态文件，守护进程每次轮询更新"""
+    status_file = _get_image_log_dir() / f"{task_id}.status"
+    status_data = {
+        "task_id": task_id,
+        "status": "polling",
+        "poll_count": poll_count,
+        "started_at": started_at.strftime('%Y-%m-%dT%H:%M:%S'),
+        "last_poll": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+        "timeout_at": timeout_at.strftime('%Y-%m-%dT%H:%M:%S'),
+        "pid": pid
+    }
+    try:
+        status_file.write_text(json.dumps(status_data, ensure_ascii=False), encoding='utf-8')
+    except Exception:
+        pass
+
+def _write_delivery(task_id: str, text: str) -> None:
+    """写入最终交付文件（用户友好的纯文本消息）"""
+    delivery_file = _get_image_log_dir() / f"{task_id}.delivery"
+    try:
+        delivery_file.write_text(text, encoding='utf-8')
+    except Exception:
+        pass
+
+def _cleanup_daemon_files(task_id: str) -> None:
+    """清理守护进程临时文件（.pid, .status）"""
+    log_dir = _get_image_log_dir()
+    for suffix in ('.pid', '.status'):
+        f = log_dir / f"{task_id}{suffix}"
+        try:
+            f.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+def _start_background_daemon(task_id: str, max_wait: int = 300, poll_interval: int = 10) -> None:
+    """fork 后台守护进程，轮询任务结果"""
+    import subprocess
+    daemon_cmd = [
+        sys.executable, os.path.abspath(__file__),
+        "--daemon", "--task-id", task_id,
+        "--max-wait", str(max_wait),
+        "--poll-interval", str(poll_interval)
+    ]
+    proc = subprocess.Popen(
+        daemon_cmd,
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL
+    )
+    pid_file = _get_image_log_dir() / f"{task_id}.pid"
+    pid_file.write_text(str(proc.pid))
+
+def _run_daemon(task_id: str, max_wait: int, poll_interval: int) -> None:
+    """后台守护进程主循环：轮询 API 直到完成/失败/超时"""
+    # 加载 .env
+    if DOTENV_AVAILABLE:
+        env_paths = [
+            Path(__file__).parent.parent / ".env",
+            Path(__file__).parent.parent.parent / ".env",
+        ]
+        for env_path in env_paths:
+            if env_path.exists():
+                load_dotenv(env_path)
+                break
+
+    api_key = os.getenv("GIGGLE_API_KEY")
+    if not api_key:
+        _write_delivery(task_id, "❌ 守护进程错误：未找到 GIGGLE_API_KEY 环境变量")
+        _cleanup_daemon_files(task_id)
+        return
+
+    client = SeedreamAPI(api_key)
+    started_at = datetime.now()
+    timeout_at = started_at + timedelta(seconds=max_wait)
+    poll_count = 0
+    pid = os.getpid()
+    prompt_text = _load_task_prompt(task_id) or "图片"
+    log_prompt = _load_task_prompt(task_id, truncate=False) or "unknown"
+
+    while datetime.now() < timeout_at:
+        poll_count += 1
+        _write_status(task_id, poll_count, started_at, timeout_at, pid)
+
+        try:
+            result = client.query_task(task_id)
+        except Exception:
+            time.sleep(poll_interval)
+            continue
+
+        data = result.get("data", {})
+        status = data.get("status", "")
+
+        if status == TaskStatus.COMPLETED.value:
+            image_urls = client.extract_image_urls(result)
+            if not image_urls:
+                delivery = (f"😔 生成遇到了问题\n\n"
+                            f"关于「{prompt_text}」的创作虽已完成但未返回图片。\n\n"
+                            f"💡 建议重新生成试试，我随时待命~")
+                _write_delivery(task_id, delivery)
+                _write_image_log(task_id, log_prompt, "empty_urls",
+                                 started_at.strftime('%Y-%m-%d %H:%M:%S'),
+                                 error_msg="completed but no image urls")
+            else:
+                _mark_image_sent(task_id)
+                view_urls = [to_view_url(u) for u in image_urls]
+                view_count = len(view_urls)
+                display_lines = [f"👉 [查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
+                parts = ["🎨 图片已就绪！\n"]
+                if view_count > 1:
+                    parts.append(f"关于「{prompt_text}」的创作已完成，共 {view_count} 张 ✨\n")
+                else:
+                    parts.append(f"关于「{prompt_text}」的创作已完成 ✨\n")
+                parts.append("\n".join(display_lines))
+                parts.append("\n如需调整，随时告诉我~")
+                delivery = "\n".join(parts)
+                _write_delivery(task_id, delivery)
+                _write_image_log(task_id, log_prompt, "success",
+                                 started_at.strftime('%Y-%m-%d %H:%M:%S'),
+                                 view_urls=view_urls)
+            _cleanup_daemon_files(task_id)
+            return
+
+        if status in ("failed", "error"):
+            err_msg = data.get("err_msg", "未知错误")
+            try:
+                err_obj = json.loads(err_msg) if isinstance(err_msg, str) and err_msg.startswith("{") else None
+                if err_obj and "message" in err_obj:
+                    err_msg = err_obj["message"]
+            except (json.JSONDecodeError, TypeError):
+                pass
+            if "sensitive information" in str(err_msg).lower():
+                err_msg = "输入内容可能包含敏感信息，被服务端拦截"
+            delivery = (f"😔 生成遇到了问题\n\n"
+                        f"关于「{prompt_text}」的创作未能完成：{err_msg}\n\n"
+                        f"💡 建议调整描述后重新尝试，我随时待命~")
+            _write_delivery(task_id, delivery)
+            _write_image_log(task_id, log_prompt, "failed",
+                             started_at.strftime('%Y-%m-%d %H:%M:%S'),
+                             error_msg=err_msg)
+            _cleanup_daemon_files(task_id)
+            return
+
+        time.sleep(poll_interval)
+
+    # 超时
+    elapsed = max_wait // 60
+    delivery = (f"⏰ 生成超时\n\n"
+                f"关于「{prompt_text}」的创作已等待 {elapsed} 分钟仍未完成。\n\n"
+                f"💡 请稍后重试，或联系管理员检查服务状态。")
+    _write_delivery(task_id, delivery)
+    _write_image_log(task_id, log_prompt, "timeout",
+                     started_at.strftime('%Y-%m-%d %H:%M:%S'),
+                     error_msg=f"timeout after {max_wait}s")
+    _cleanup_daemon_files(task_id)
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -446,6 +604,12 @@ def parse_args():
     parser.add_argument('--json', action='store_true',
                        help='以JSON格式输出结果')
 
+    # 后台守护进程参数（内部使用）
+    parser.add_argument('--daemon', action='store_true',
+                       help='后台守护进程模式（内部使用，勿手动调用）')
+    parser.add_argument('--check-delivery', action='store_true',
+                       help='检查任务交付状态（Agent 调用）')
+
     return parser.parse_args()
 
 
@@ -497,6 +661,35 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False, 
 def main():
     """主函数"""
     args = parse_args()
+
+    # 守护进程模式（内部调用，自行加载环境变量）
+    if args.daemon:
+        if not args.task_id:
+            sys.exit(1)
+        _run_daemon(args.task_id, args.max_wait, args.poll_interval)
+        sys.exit(0)
+
+    # 检查交付状态（不需要 API key）
+    if args.check_delivery:
+        if not args.task_id:
+            print("错误: 需要提供 --task-id 参数", file=sys.stderr)
+            sys.exit(1)
+        log_dir = _get_image_log_dir()
+        delivery_file = log_dir / f"{args.task_id}.delivery"
+        status_file = log_dir / f"{args.task_id}.status"
+        if delivery_file.exists():
+            print(delivery_file.read_text(encoding='utf-8'))
+        elif status_file.exists():
+            try:
+                status_data = json.loads(status_file.read_text(encoding='utf-8'))
+                started = datetime.fromisoformat(status_data.get("started_at", ""))
+                elapsed = int((datetime.now() - started).total_seconds())
+                print(f"⏳ 图片生成中，已等待 {elapsed} 秒，已轮询 {status_data.get('poll_count', 0)} 次...")
+            except Exception:
+                print("⏳ 图片生成中，请稍候...")
+        else:
+            print(f"❓ 未找到任务 {args.task_id} 的状态信息")
+        sys.exit(0)
 
     # 加载 .env 文件（如果存在）
     if DOTENV_AVAILABLE:
@@ -650,9 +843,10 @@ def main():
                 _write_image_log(task_id, args.prompt, "success", submitted_at,
                                  view_urls=[to_view_url(u) for u in image_urls])
             else:
-                # --no-wait 模式：保存 prompt 供 query 时展示，输出 task_id 到 stdout
+                # --no-wait 模式：保存 prompt，输出 task_id，自动启动后台守护进程
                 _save_task_prompt(task_id, args.prompt)
                 print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
+                _start_background_daemon(task_id, max_wait=300, poll_interval=10)
 
     except Exception as e:
         err = str(e)

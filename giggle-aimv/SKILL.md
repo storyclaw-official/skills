@@ -2,7 +2,7 @@
 name: giggle-aimv
 description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词/上传音乐生成视频等需求时使用。支持三种音乐生成模式（提示词、自定义、上传），调用 MV 托管 API 完成完整工作流。
 user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎵","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"2.0.0","author":"姜式伙伴"}
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎵","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"3.0.0","author":"姜式伙伴"}
 ---
 
 # MV 托管模式 API Skill
@@ -39,13 +39,13 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 **上传模式 (upload)**：
 - `music_asset_id`：已有音乐资产 ID（必需）
 
-## 执行流程（三阶段双路径）
+## 执行流程（两步完成）
 
-MV 生成通常需要 3-10 分钟。采用「同步等待 + Cron 兜底」双路径，确保用户一定收到结果。
+MV 生成通常需要 3-10 分钟。`start` 命令提交任务后自动 fork 后台守护进程，轮询进度、自动支付、写入交付文件，**无需 Cron，无需手动轮询**。
 
 ---
 
-### 第零步：参数确认（必须先完成，再执行 Phase 1）
+### 第零步：参数确认（必须先完成，再执行第一步）
 
 MV 生成耗时且消耗积分，**提交前必须确认关键参数**。
 
@@ -73,13 +73,13 @@ MV 生成耗时且消耗积分，**提交前必须确认关键参数**。
 | 宽高比 | 横屏（16:9）还是竖屏（9:16）？ | 用户已说明 |
 | 音乐描述/歌词 | 根据模式：描述想要的音乐风格，或提供歌词+风格+歌名 | 已提供 |
 
-所有参数确认后，**才执行 Phase 1**。
+所有参数确认后，**才执行第一步**。
 
 ---
 
-### 第一步：提交任务（Phase 1，exec < 10 秒完成）
+### 第一步：提交任务（exec < 10 秒完成，自动启动后台守护进程）
 
-**先发送消息给用户**："MV 生成中，通常 3-10 分钟，每3分钟自动报告进度，请稍候。"
+**先发送消息给用户**："MV 生成已提交，后台自动处理中（通常 3-10 分钟），完成后会自动通知您，无需其他操作。"
 
 **提示词模式**：
 ```bash
@@ -119,6 +119,8 @@ python3 scripts/trustee_api.py start \
 {"code": 200, "status": "started", "data": {"project_id": "xxx", "log_file": "/path/logs/xxx.log"}}
 ```
 
+`start` 成功后脚本自动 fork 后台守护进程（`daemon`），每 60 秒轮询一次，最长等待 30 分钟，自动支付、自动写入交付文件。**无需注册 Cron，无需手动轮询。**
+
 **立即将 project_id 写入记忆**（`addMemory`）：
 ```
 giggle-aimv project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
@@ -128,79 +130,40 @@ giggle-aimv project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:
 
 ---
 
-### 第二步：注册 Cron（立刻注册，在 Phase 3 之前）
+### 第二步：查询交付结果（check-delivery）
 
-使用 `cron` 工具注册轮询任务，**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
-
-```json
-{
-  "action": "add",
-  "job": {
-    "name": "giggle-aimv-<project_id前8位>",
-    "schedule": {
-      "kind": "every",
-      "everyMs": 180000
-    },
-    "payload": {
-      "kind": "systemEvent",
-      "text": "MV任务轮询：请执行 exec python3 scripts/trustee_api.py query --project-id <完整project_id>，根据 Cron 处理逻辑处理结果。"
-    },
-    "sessionTarget": "main"
-  }
-}
-```
-
-**参数约束**：`name` 必填，`schedule.kind` 必须为 `"every"`，`payload.kind` 必须为 `"systemEvent"`（只含 `kind` + `text`），`sessionTarget` 必须为 `"main"`。**禁止**在 payload 中放 `message`、`model`、`timeoutSeconds` 等字段。
-
-每次 Cron 触发后执行：
-```bash
-python3 scripts/trustee_api.py query --project-id <project_id>
-```
-
-**Cron 处理逻辑**（根据 exit code）：
-
-| exit code | 含义 | 处理 |
-|-----------|------|------|
-| 0 | 完成/支付中/进行中 | 读 JSON：already_sent→跳过取消；signed_url→发结果取消；pay_failed→发"积分不足"取消；msg 含"自动支付"→转发消息 Cron 继续；else→发步骤进度，Cron 继续 |
-| 1 | 失败/积分不足 | 发错误消息，取消 Cron |
-
-> **说明**：支付逻辑已内置于 `query` 脚本，检测到 `pay_status=="pending"` 时自动调用 pay API，**无需 agent 介入**。
-
-**步骤进度消息格式**（从 `data.current_step` 和 `data.completed_steps` 读取）：
-```
-MV 生成中 — 已完成：音乐✓ 分镜✓ | 当前：镜头渲染 | 已用时 X 分钟
-```
-
-步骤名称翻译：
-- `music-generate` → 音乐生成
-- `storyboard` → 分镜制作
-- `shot` → 镜头渲染
-- `editor` → 剪辑合成
-
----
-
-### 第三步：同步等待（Phase 3，乐观路径）
+当用户主动询问 MV 进度，或需要确认结果时执行：
 
 ```bash
-python3 scripts/trustee_api.py query --project-id <project_id> --poll
+python3 scripts/trustee_api.py check-delivery --project-id <project_id>
 ```
 
-- 返回 `status: "already_sent"` → 跳过，取消 Cron
-- 返回 `code: 200` + 含 `signed_url` → **立即发送结果给用户**，取消 Cron
-- exec 超时 → Cron 已在运行，继续等待即可
+**输出三种情况**：
+
+| 情况 | 输出内容 | 处理 |
+|------|---------|------|
+| 已完成 | 完整交付消息（含播放链接） | 直接转发给用户 |
+| 生成中 | `⏳ MV 生成中，已等待 X 秒，已轮询 N 次...` | 告知用户继续等待 |
+| 未找到 | `❓ 未找到项目 xxx 的状态信息` | 用 `query --project-id` 直接查询 |
 
 ---
 
 ### 结果消息格式
 
-```
-MV 生成完成
+后台守护进程完成后自动写入 `.delivery` 文件，`check-delivery` 读取后输出。成功时格式：
 
-▶️ 在线播放：<data.signed_url>
-⏱️ 时长：<data.duration>s
+```
+🎵 MV 生成完成！
+
+关于「描述」的创作已完成 ✨
+
+▶️ 在线播放：<signed_url>
+⏱️ 时长：Xs
+
+如需调整，随时告诉我~
 ```
 
-**注意**：`data.signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击。
+**注意**：`signed_url` 已将 `~` 编码为 `%7E`，飞书可正常点击。
 
 ---
 
@@ -219,9 +182,9 @@ MV 生成完成
 | 场景 | 处理方式 |
 |------|---------|
 | `start` 失败 | 告知错误，询问用户是否重试 |
-| 支付失败 | "积分不足，请充值后告诉我重试" |
-| 子步骤失败 | 询问用户是否重试，可用 `retry --project-id <id> --current-step <step>` |
-| 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
+| 支付失败（积分不足） | `.delivery` 文件写入"积分不足"，`check-delivery` 可读取 |
+| 子步骤失败 | `.delivery` 文件写入失败详情，询问用户是否重试 |
+| 超时（30 分钟） | `.delivery` 文件写入超时信息，可用 `check-delivery` 查看 |
 
 **重试步骤**：
 ```bash
@@ -233,8 +196,10 @@ python3 scripts/trustee_api.py retry --project-id <id> --current-step shot
 
 ### Gateway 重启后恢复
 
-1. **记忆中有 project_id** → 直接执行 `query --project-id xxx`，**绝不重新 start**
-2. **两者都无** → 告知用户，询问是否重新生成
+1. **记忆中有 project_id** → 执行 `check-delivery --project-id xxx` 检查是否有交付结果
+2. **有 `.delivery` 文件** → 直接读取并发送给用户
+3. **无 `.delivery` 文件** → 执行 `query --project-id xxx` 查询当前状态，守护进程可能已因重启中断，需根据状态决定是否重新启动 daemon
+4. **两者都无** → 告知用户，询问是否重新生成
 
 ### 提交任务 API 请求示例（提示词模式）
 
@@ -365,7 +330,7 @@ python3 scripts/trustee_api.py retry --project-id <id> --current-step shot
 }
 ```
 
-说明：`pay_status` 为 `pending` 时需调用支付接口；所有 `steps` 完成后 `video_asset.download_url` 有值，可下载视频。
+说明：`pay_status` 为 `pending` 时守护进程自动调用支付接口；所有 `steps` 完成后 `video_asset.download_url` 有值，可下载视频。
 
 ### 支付 API 请求与响应示例
 

@@ -95,6 +95,61 @@ class TrusteeModeAPI:
         sent_file = self._get_log_dir() / f"{project_id}.sent"
         sent_file.touch()
 
+    def _write_status(self, project_id: str, poll_count: int, started_at, timeout_at, pid: int) -> None:
+        """写入实时状态文件"""
+        status_file = self._get_log_dir() / f"{project_id}.status"
+        status_data = {
+            "project_id": project_id,
+            "status": "polling",
+            "poll_count": poll_count,
+            "started_at": started_at.strftime('%Y-%m-%dT%H:%M:%S'),
+            "last_poll": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+            "timeout_at": timeout_at.strftime('%Y-%m-%dT%H:%M:%S'),
+            "pid": pid
+        }
+        try:
+            status_file.write_text(json.dumps(status_data, ensure_ascii=False), encoding='utf-8')
+        except Exception:
+            pass
+
+    def _write_delivery(self, project_id: str, text: str) -> None:
+        """写入最终交付文件"""
+        delivery_file = self._get_log_dir() / f"{project_id}.delivery"
+        try:
+            delivery_file.write_text(text, encoding='utf-8')
+        except Exception:
+            pass
+
+    def _cleanup_daemon_files(self, project_id: str) -> None:
+        """清理守护进程临时文件"""
+        log_dir = self._get_log_dir()
+        for suffix in ('.pid', '.status'):
+            f = log_dir / f"{project_id}{suffix}"
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def _save_prompt(self, project_id: str, prompt: str) -> None:
+        """保存故事内容"""
+        try:
+            (self._get_log_dir() / f"{project_id}.prompt").write_text(prompt, encoding='utf-8')
+        except Exception:
+            pass
+
+    def _load_prompt(self, project_id: str, truncate: bool = True) -> Optional[str]:
+        """读取故事内容"""
+        try:
+            f = self._get_log_dir() / f"{project_id}.prompt"
+            if f.exists():
+                text = f.read_text(encoding='utf-8').strip()
+                if truncate:
+                    return text[:20] + "..." if len(text) > 20 else text
+                return text
+        except Exception:
+            pass
+        return None
+
     def create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
         创建项目
@@ -931,6 +986,135 @@ class TrusteeModeAPI:
 
             time.sleep(interval)
 
+    def run_daemon(self, project_id: str, max_wait: int = 2400, poll_interval: int = 60) -> None:
+        """后台守护进程主循环：轮询直到完成/失败/超时，含自动支付"""
+        started_at = datetime.now()
+        timeout_at = started_at + timedelta(seconds=max_wait)
+        poll_count = 0
+        pid = os.getpid()
+        paid = False
+        prompt_text = self._load_prompt(project_id) or "视频"
+
+        # 步骤名翻译
+        step_names = {
+            "script": "剧本生成", "character": "角色设计",
+            "storyboard": "分镜制作", "shot": "镜头图渲染", "video": "视频渲染"
+        }
+        video_first_model = "grok"
+        video_second_model = "seedance15-pro"
+        image_first_model = "seedream45"
+
+        while datetime.now() < timeout_at:
+            poll_count += 1
+            self._write_status(project_id, poll_count, started_at, timeout_at, pid)
+
+            try:
+                result = self.query_progress(project_id)
+                code = result.get("code")
+                if isinstance(code, str):
+                    code = int(code) if code.isdigit() else 0
+                if code != 0 and code != 200:
+                    time.sleep(poll_interval)
+                    continue
+            except Exception:
+                time.sleep(poll_interval)
+                continue
+
+            data = result.get("data", {})
+            status = data.get("status", "unknown")
+            current_step = data.get("current_step", "")
+            pay_status = data.get("pay_status", "")
+            err_msg = data.get("err_msg", "")
+
+            # 失败
+            if status == "failed" or err_msg:
+                delivery = (f"😔 视频生成失败\n\n"
+                            f"关于「{prompt_text}」的创作未能完成：{err_msg or '未知错误'}\n\n"
+                            f"💡 建议调整内容后重新尝试。")
+                self._write_delivery(project_id, delivery)
+                self._cleanup_daemon_files(project_id)
+                return
+
+            # 检查子步骤失败
+            for step in data.get("steps", []):
+                for sub in step.get("sub_steps", []):
+                    if sub.get("status") == "failed" or sub.get("error"):
+                        delivery = (f"😔 视频生成失败\n\n"
+                                    f"步骤 {sub.get('step', '未知')} 出错：{sub.get('error', '未知错误')}\n\n"
+                                    f"project_id: {project_id}")
+                        self._write_delivery(project_id, delivery)
+                        self._cleanup_daemon_files(project_id)
+                        return
+
+            # 自动支付
+            if not paid and (pay_status == "pending" or (current_step and "pay" in current_step.lower())):
+                try:
+                    pay_result = self.pay(
+                        project_id=project_id,
+                        video_first_model=video_first_model,
+                        video_second_model=video_second_model,
+                        image_first_model=image_first_model
+                    )
+                    pay_code = pay_result.get("code")
+                    if isinstance(pay_code, str):
+                        pay_code = int(pay_code) if pay_code.isdigit() else 0
+                    if pay_code == 0 or pay_code == 200:
+                        paid = True
+                    else:
+                        delivery = f"💰 积分不足\n\n视频生成需要支付积分但余额不足，请充值后重试。\n\nproject_id: {project_id}"
+                        self._write_delivery(project_id, delivery)
+                        self._cleanup_daemon_files(project_id)
+                        return
+                except Exception:
+                    pass
+                continue
+
+            # 完成
+            if status == "completed":
+                video_asset = data.get("video_asset", {})
+                download_url = video_asset.get("download_url") if video_asset else None
+                if video_asset and download_url:
+                    if self._check_sent(project_id):
+                        self._cleanup_daemon_files(project_id)
+                        return
+                    signed_url = video_asset.get("signed_url", "").replace("~", "%7E")
+                    duration = video_asset.get("duration", 0)
+                    shot_count = data.get("shot_count", 0)
+                    # 下载视频
+                    local_path = None
+                    download_failed = False
+                    try:
+                        local_path = self.download_video(download_url, project_id)
+                    except Exception:
+                        download_failed = True
+
+                    self._mark_sent(project_id)
+
+                    parts = ["🎬 视频生成完成！\n"]
+                    parts.append(f"关于「{prompt_text}」的创作已完成 ✨\n")
+                    parts.append(f"▶️ 在线播放：{signed_url}")
+                    parts.append(f"⏱️ 时长：{duration}s | 分镜：{shot_count} 个")
+                    if local_path and not download_failed:
+                        parts.append(f"📁 本地：{local_path}")
+                    elif download_failed:
+                        parts.append("（视频下载失败，请用上方链接在浏览器播放）")
+                    parts.append("\n如需调整，随时告诉我~")
+                    delivery = "\n".join(parts)
+                    self._write_delivery(project_id, delivery)
+                    self._cleanup_daemon_files(project_id)
+                    return
+
+            time.sleep(poll_interval)
+
+        # 超时
+        elapsed = max_wait // 60
+        delivery = (f"⏰ 视频生成超时\n\n"
+                    f"关于「{prompt_text}」的创作已等待 {elapsed} 分钟仍未完成。\n\n"
+                    f"project_id: {project_id}\n"
+                    f"💡 可稍后使用 --check-delivery 查询结果。")
+        self._write_delivery(project_id, delivery)
+        self._cleanup_daemon_files(project_id)
+
 
 def print_response(result: Dict[str, Any], pretty: bool = True):
     """打印响应结果"""
@@ -1015,7 +1199,17 @@ def main():
                              choices=['auto', '30', '60', '120', '180', '240', '300'],
                              help='视频时长（默认: auto）')
     start_parser.add_argument('--style-id', type=int, help='风格ID（可选）')
-    
+
+    # daemon 命令（后台守护进程，内部使用）
+    daemon_parser = subparsers.add_parser('daemon', help='后台守护进程（内部使用）')
+    daemon_parser.add_argument('--project-id', required=True, help='项目ID')
+    daemon_parser.add_argument('--max-wait', type=int, default=2400, help='最大等待秒数')
+    daemon_parser.add_argument('--poll-interval', type=int, default=60, help='轮询间隔秒数')
+
+    # check-delivery 命令
+    check_parser = subparsers.add_parser('check-delivery', help='检查任务交付状态')
+    check_parser.add_argument('--project-id', required=True, help='项目ID')
+
     args = parser.parse_args()
     
     if not args.command:
@@ -1200,6 +1394,26 @@ def main():
             code = int(code) if code.isdigit() else 0
         if code != 0 and code != 200:
             sys.exit(1)
+        # 成功后自动启动后台守护进程
+        project_id = result.get("data", {}).get("project_id")
+        if project_id:
+            api._save_prompt(project_id, args.diy_story)
+            import subprocess
+            daemon_cmd = [
+                sys.executable, os.path.abspath(__file__),
+                "daemon", "--project-id", project_id,
+                "--max-wait", "2400",
+                "--poll-interval", "60"
+            ]
+            proc = subprocess.Popen(
+                daemon_cmd,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL
+            )
+            pid_file = api._get_log_dir() / f"{project_id}.pid"
+            pid_file.write_text(str(proc.pid))
 
     elif args.command == 'workflow':
         result = api.execute_workflow(
@@ -1210,6 +1424,30 @@ def main():
             style_id=args.style_id if hasattr(args, 'style_id') and args.style_id is not None else None
         )
         print_response(result, args.pretty)
+
+    elif args.command == 'daemon':
+        api.run_daemon(
+            project_id=args.project_id,
+            max_wait=args.max_wait,
+            poll_interval=args.poll_interval
+        )
+
+    elif args.command == 'check-delivery':
+        log_dir = api._get_log_dir()
+        delivery_file = log_dir / f"{args.project_id}.delivery"
+        status_file = log_dir / f"{args.project_id}.status"
+        if delivery_file.exists():
+            print(delivery_file.read_text(encoding='utf-8'))
+        elif status_file.exists():
+            try:
+                status_data = json.loads(status_file.read_text(encoding='utf-8'))
+                started = datetime.fromisoformat(status_data.get("started_at", ""))
+                elapsed = int((datetime.now() - started).total_seconds())
+                print(f"⏳ 视频生成中，已等待 {elapsed} 秒，已轮询 {status_data.get('poll_count', 0)} 次...")
+            except Exception:
+                print("⏳ 视频生成中，请稍候...")
+        else:
+            print(f"❓ 未找到项目 {args.project_id} 的状态信息")
 
 
 if __name__ == '__main__':
