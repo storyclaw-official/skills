@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+---
+
+## [3.0.0] - 2026-02-25
+
+### 新增
+- **全部 4 个生成类 Skill（image/music/aimv/drama）**：新增 Cron 超时兜底计数器（`.count` 文件），防止任务永不返回时 Cron 无限运行
+  - `giggle-music`：超过 5 次轮询（约 10 分钟）输出超时纯文本 + exit(0)
+  - `giggle-image`：超过 10 次轮询（约 5 分钟）输出超时纯文本 + exit(0)
+  - `giggle-aimv`：超过 15 次轮询（约 45 分钟）输出超时纯文本 + exit(0)
+  - `giggle-drama`：超过 20 次轮询（约 60 分钟）输出超时纯文本 + exit(0)
+- `giggle-music`：新增 `_save_music_prompt` / `_load_music_prompt`，`--no-wait` 提交时保存 prompt，`--query` 时读取展示给用户
+
+### 变更
+- `giggle-music`：`completed` 输出改为纯文本（对齐 giggle-image 风格），格式：`🎶 音乐已就绪！\n关于「{prompt}」...共 N 首 + Markdown 链接`
+- `giggle-music`：`failed` 输出改为纯文本 + exit(0)（原为 JSON + exit(1)），避免触发 exec failed
+- `giggle-music` SKILL.md v3.0：Cron 处理逻辑改为纯文本判断（对齐 giggle-image），删除"结果消息格式"章节（脚本直接输出，Agent 无需格式化），删除 `--no-wait` 参数说明
+- `giggle-image` SKILL.md：删除冗余章节（执行前检查、步骤5反馈迭代、参数约束重复说明）
+- `giggle-aimv` SKILL.md：删除 Cron 参数约束重复说明
+- `giggle-drama` SKILL.md：删除 Cron 参数约束重复说明
+
+### 修复
+- `giggle-aimv` / `giggle-drama`：单次 query 路径中 API 返回 `no task found` 时 `data` 为 `None`，`None.get()` 抛 `AttributeError` → exit(1) → 触发 `⚠️ Exec failed`；改为 `(r.get("data") or {})` 防止崩溃
+
+---
+
+## [2.0.0] - 2026-02-24
+
 ### 新增
 - `giggle-drama`：新增 `start` 子命令（Phase 1），< 10 秒完成创建项目 + 提交任务，stdout 返回 `{"status": "started", "project_id": "...", "log_file": "..."}`
 - `giggle-drama`：新增 `poll_until_complete()` 方法（Phase 3），含完整工作流（支付逻辑、下载、`.sent` 防重复、completed 无资源超时限制）
