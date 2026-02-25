@@ -110,6 +110,18 @@ class TrusteeModeAPI:
         f.write_text(str(count))
         return count
 
+    @staticmethod
+    def _encode_asset_urls(video_asset: dict) -> dict:
+        """CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失该字符"""
+        if not video_asset:
+            return video_asset
+        encoded = dict(video_asset)
+        for key in ("signed_url", "download_url", "thumbnail_url"):
+            val = encoded.get(key)
+            if val and isinstance(val, str):
+                encoded[key] = val.replace("~", "%7E")
+        return encoded
+
     def create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
         创建项目
@@ -691,18 +703,14 @@ class TrusteeModeAPI:
                 download_url = video_asset.get("download_url") if video_asset else None
                 
                 if video_asset and download_url:
-                    signed_url = video_asset.get("signed_url", "")
-                    thumbnail_url = video_asset.get("thumbnail_url", "")
+                    # CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失
+                    safe_asset = self._encode_asset_urls(video_asset)
                     duration = video_asset.get("duration", 0)
                     shot_count = data.get("shot_count", 0)
                     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务完成！时长: {duration}s | 分镜数: {shot_count}", file=sys.stderr)
 
-                    # 自动下载视频到本地
+                    # 自动下载视频到本地（用原始 URL 下载）
                     local_path = self.download_video(download_url, project_name)
-
-                    # 对 signed_url 做 URL 编码：~ → %7E
-                    # 飞书发送文本消息时会在 ~ 处截断链接，导致 Signature 不完整
-                    safe_signed_url = signed_url.replace("~", "%7E")
 
                     return {
                         "code": 200,
@@ -710,13 +718,13 @@ class TrusteeModeAPI:
                         "uuid": query_result.get("uuid", ""),
                         "data": {
                             "project_id": project_id,
-                            "signed_url": safe_signed_url,  # 在线播放链接（~ 已编码为 %7E，飞书可正常点击）
-                            "download_url": download_url,
-                            "thumbnail_url": thumbnail_url,
+                            "signed_url": safe_asset.get("signed_url", ""),
+                            "download_url": safe_asset.get("download_url", ""),
+                            "thumbnail_url": safe_asset.get("thumbnail_url", ""),
                             "duration": duration,
                             "shot_count": shot_count,
                             "local_path": local_path,
-                            "video_asset": video_asset,
+                            "video_asset": safe_asset,
                             "status": status
                         }
                     }
@@ -886,13 +894,13 @@ class TrusteeModeAPI:
                             "data": {"project_id": project_id}
                         }
 
-                    signed_url = video_asset.get("signed_url", "")
-                    thumbnail_url = video_asset.get("thumbnail_url", "")
+                    # CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失
+                    safe_asset = self._encode_asset_urls(video_asset)
                     duration = video_asset.get("duration", 0)
                     shot_count = data.get("shot_count", 0)
                     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 任务完成！时长: {duration}s | 分镜数: {shot_count}", file=sys.stderr)
 
-                    # 下载视频
+                    # 下载视频（用原始 URL 下载）
                     local_path = None
                     download_failed = False
                     try:
@@ -900,9 +908,6 @@ class TrusteeModeAPI:
                     except Exception as e:
                         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 视频下载失败: {e}", file=sys.stderr)
                         download_failed = True
-
-                    # 对 signed_url 做 URL 编码：~ → %7E
-                    safe_signed_url = signed_url.replace("~", "%7E")
 
                     # 标记已推送
                     self._mark_sent(project_id)
@@ -912,13 +917,13 @@ class TrusteeModeAPI:
                         "msg": "success",
                         "data": {
                             "project_id": project_id,
-                            "signed_url": safe_signed_url,
-                            "download_url": download_url,
-                            "thumbnail_url": thumbnail_url,
+                            "signed_url": safe_asset.get("signed_url", ""),
+                            "download_url": safe_asset.get("download_url", ""),
+                            "thumbnail_url": safe_asset.get("thumbnail_url", ""),
                             "duration": duration,
                             "shot_count": shot_count,
                             "local_path": local_path,
-                            "video_asset": video_asset,
+                            "video_asset": safe_asset,
                             "status": status
                         }
                     }
@@ -1136,9 +1141,10 @@ def main():
                         }, args.pretty)
                     else:
                         api._mark_sent(args.project_id)
-                        # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
-                        if result.get("data", {}).get("video_asset", {}).get("signed_url"):
-                            result["data"]["video_asset"]["signed_url"] = result["data"]["video_asset"]["signed_url"].replace("~", "%7E")
+                        # CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失
+                        video_asset = result.get("data", {}).get("video_asset", {})
+                        if video_asset:
+                            result["data"]["video_asset"] = TrusteeModeAPI._encode_asset_urls(video_asset)
                         print_response(result, args.pretty)
                     # exit(0) 隐式：完成或已发送
                 else:

@@ -94,6 +94,18 @@ class MVTrusteeAPI:
         f.write_text(str(count))
         return count
 
+    @staticmethod
+    def _encode_asset_urls(video_asset: dict) -> dict:
+        """CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失该字符"""
+        if not video_asset:
+            return video_asset
+        encoded = dict(video_asset)
+        for key in ("signed_url", "download_url", "thumbnail_url"):
+            val = encoded.get(key)
+            if val and isinstance(val, str):
+                encoded[key] = val.replace("~", "%7E")
+        return encoded
+
     def create_project(self, name: str, aspect: str) -> Dict[str, Any]:
         """创建 MV 项目"""
         url = f"{self.base_url}/api/v1/project/create"
@@ -419,24 +431,22 @@ class MVTrusteeAPI:
                     # 防重复：检查 .sent 文件
                     if self._check_sent(project_id):
                         return {"code": 200, "status": "already_sent", "msg": "结果已推送，跳过重复发送", "data": {"project_id": project_id}}
-                    signed_url = video_asset.get("signed_url", "").replace("~", "%7E")
-                    thumbnail_url = video_asset.get("thumbnail_url", "")
+                    # CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失
+                    safe_asset = self._encode_asset_urls(video_asset)
                     duration = video_asset.get("duration", 0)
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 任务完成！时长: {duration}s", file=sys.stderr)
                     self._mark_sent(project_id)
-                    # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
-                    safe_signed_url = signed_url.replace("~", "%7E")
                     return {
                         "code": 200,
                         "msg": "success",
                         "uuid": query_result.get("uuid", ""),
                         "data": {
                             "project_id": project_id,
-                            "signed_url": safe_signed_url,
-                            "download_url": download_url,
-                            "thumbnail_url": thumbnail_url,
+                            "signed_url": safe_asset.get("signed_url", ""),
+                            "download_url": safe_asset.get("download_url", ""),
+                            "thumbnail_url": safe_asset.get("thumbnail_url", ""),
                             "duration": duration,
-                            "video_asset": video_asset,
+                            "video_asset": safe_asset,
                             "status": "completed"
                         }
                     }
@@ -612,8 +622,8 @@ class MVTrusteeAPI:
             video_asset = data.get("video_asset", {})
             download_url = video_asset.get("download_url") if video_asset else None
             if video_asset and download_url:
-                signed_url = video_asset.get("signed_url", "")
-                thumbnail_url = video_asset.get("thumbnail_url", "")
+                # CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失
+                safe_asset = self._encode_asset_urls(video_asset)
                 duration = video_asset.get("duration", 0)
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] [{project_id}] 任务完成！时长: {duration}s", file=sys.stderr)
                 return {
@@ -622,11 +632,11 @@ class MVTrusteeAPI:
                     "uuid": query_result.get("uuid", ""),
                     "data": {
                         "project_id": project_id,
-                        "signed_url": signed_url,      # 在线播放链接
-                        "download_url": download_url,  # 下载链接
-                        "thumbnail_url": thumbnail_url,
+                        "signed_url": safe_asset.get("signed_url", ""),
+                        "download_url": safe_asset.get("download_url", ""),
+                        "thumbnail_url": safe_asset.get("thumbnail_url", ""),
                         "duration": duration,
-                        "video_asset": video_asset,
+                        "video_asset": safe_asset,
                         "status": "completed"
                     },
                 }
@@ -781,9 +791,9 @@ def main():
                         r = {"code": 200, "status": "already_sent", "msg": "结果已推送，跳过重复发送", "data": {"project_id": args.project_id}}
                     else:
                         api._mark_sent(args.project_id)
-                        # CloudFront 签名中 ~ 须编码为 %7E，否则飞书等平台会截断 URL
-                        if r.get("data", {}).get("video_asset", {}).get("signed_url"):
-                            r["data"]["video_asset"]["signed_url"] = r["data"]["video_asset"]["signed_url"].replace("~", "%7E")
+                        # CloudFront 签名 URL 中 ~ 编码为 %7E，防止飞书等平台丢失
+                        safe_asset = MVTrusteeAPI._encode_asset_urls(video_asset)
+                        r["data"]["video_asset"] = safe_asset
                     print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
                     # exit(0) 隐式：完成或已发送
                 else:
