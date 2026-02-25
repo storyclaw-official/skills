@@ -423,6 +423,8 @@ def parse_args():
     # 操作模式
     parser.add_argument('--query', action='store_true',
                        help='查询已存在的任务(需配合 --task-id)')
+    parser.add_argument('--poll', action='store_true',
+                       help='配合 --query 使用，轮询等待任务完成（同步兜底路径）')
 
     # 基本参数
     parser.add_argument('--prompt', type=str,
@@ -551,21 +553,54 @@ def main():
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
 
-            # 超时兜底：最多轮询 10 次（约 5 分钟），超时输出纯文本触发 Cron 取消
-            count = _increment_query_count(args.task_id)
-            if count > 10:
-                prompt_text = _load_task_prompt(args.task_id) or "图片"
-                print(f"⏰ 图片生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
-                sys.exit(0)
+            # --poll 模式：同步轮询等待完成（Phase 3 兜底路径）
+            if args.poll:
+                print(f"同步轮询等待任务完成（最多 {args.max_wait} 秒）...", file=sys.stderr)
+                start_time = time.time()
+                while time.time() - start_time < args.max_wait:
+                    if _check_image_sent(args.task_id):
+                        # Cron 已推送，静默退出
+                        print("已由 Cron 推送，跳过", file=sys.stderr)
+                        sys.exit(0)
+                    try:
+                        result = client.query_task(args.task_id)
+                    except Exception as e:
+                        print(f"查询异常，继续重试: {e}", file=sys.stderr)
+                        time.sleep(args.poll_interval)
+                        continue
+                    data = result.get("data", {})
+                    status = data.get("status", "")
+                    if status == TaskStatus.COMPLETED.value:
+                        break
+                    elif status in ("failed", "error"):
+                        break
+                    print(f"任务状态: {status}，继续等待...", file=sys.stderr)
+                    time.sleep(args.poll_interval)
+                else:
+                    # 超时：静默退出，交给 Cron 继续
+                    print("同步等待超时，交给 Cron", file=sys.stderr)
+                    sys.exit(0)
+                # 跳出循环后，走下面统一的结果处理逻辑
+                # （不 increment count，poll 模式不计入 Cron 轮询次数）
+            else:
+                # 单次查询模式（Cron 触发）
+                # 超时兜底：最多轮询 10 次（约 5 分钟），超时输出纯文本触发 Cron 取消
+                count = _increment_query_count(args.task_id)
+                if count > 10:
+                    prompt_text = _load_task_prompt(args.task_id) or "图片"
+                    print(f"⏰ 图片生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
+                    sys.exit(0)
 
-            try:
-                result = client.query_task(args.task_id)
-            except Exception as e:
-                # 网络异常等：输出 JSON（含 status 字段）+ exit(0)
-                # 这样 Cron 处理逻辑会识别为"进行中"，继续下次轮询，不会误取消
-                print(json.dumps({"status": "network_error", "task_id": args.task_id}, ensure_ascii=False))
-                print(f"网络异常: {e}", file=sys.stderr)
-                sys.exit(0)
+                try:
+                    result = client.query_task(args.task_id)
+                except Exception as e:
+                    # 网络异常等：输出 JSON（含 status 字段）+ exit(0)
+                    # 这样 Cron 处理逻辑会识别为"进行中"，继续下次轮询，不会误取消
+                    print(json.dumps({"status": "network_error", "task_id": args.task_id}, ensure_ascii=False))
+                    print(f"网络异常: {e}", file=sys.stderr)
+                    sys.exit(0)
+
+            # ── 统一结果处理（单次查询和 poll 模式共用）──
             data = result.get("data", {})
             status = data.get("status", "")
 
@@ -585,8 +620,6 @@ def main():
                     sys.exit(0)
                 _mark_image_sent(args.task_id)
                 view_urls = [to_view_url(u) for u in image_urls]
-                # 输出完整的用户友好消息（含 emoji + prompt 上下文 + Markdown 链接）
-                # Agent 只需原封不动转发，不添加任何前缀
                 prompt_text = _load_task_prompt(args.task_id) or "图片"
                 view_count = len(view_urls)
                 display_lines = [f"👉 [查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
@@ -597,23 +630,19 @@ def main():
                     print(f"关于「{prompt_text}」的创作已完成 ✨\n")
                 print("\n".join(display_lines))
                 print("\n如需调整，随时告诉我~")
-                # 写入任务日志
                 log_prompt = _load_task_prompt(args.task_id, truncate=False) or "unknown"
                 _write_image_log(args.task_id, log_prompt, "success",
                                  datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                  view_urls=view_urls)
                 sys.exit(0)
             elif status in ("failed", "error"):
-                # 输出用户友好的纯文本错误消息，exit(0) 避免 OpenClaw 触发 "exec failed" 展示
                 err_msg = data.get("err_msg", "未知错误")
-                # err_msg 可能是嵌套 JSON 字符串，尝试提取 message 字段
                 try:
                     err_obj = json.loads(err_msg) if isinstance(err_msg, str) and err_msg.startswith("{") else None
                     if err_obj and "message" in err_obj:
                         err_msg = err_obj["message"]
                 except (json.JSONDecodeError, TypeError):
                     pass
-                # 将英文错误消息翻译为中文
                 if "sensitive information" in str(err_msg).lower():
                     err_msg = "输入内容可能包含敏感信息，被服务端拦截"
                 prompt_text = _load_task_prompt(args.task_id) or "图片"
@@ -625,7 +654,6 @@ def main():
                 sys.exit(0)
             else:
                 # 进行中（running/processing/pending）→ exit(0) 避免 exec failed 通知
-                # agent 通过 JSON status 字段判断是否继续 cron，不发用户消息
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(0)
 

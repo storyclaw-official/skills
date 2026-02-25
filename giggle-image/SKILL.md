@@ -11,9 +11,9 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 **API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
-## 执行流程（Phase 1 提交 + Phase 2 Cron）
+## 执行流程（三阶段双路径）
 
-图像生成通常需要 30-60 秒。采用「快速提交 + Cron 轮询」双阶段架构。
+图像生成通常需要 30-60 秒。采用「快速提交 + Cron 轮询 + 同步兜底」三阶段架构，确保用户一定收到结果。
 
 > **重要**：执行命令时**不得**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API 密钥已通过系统环境变量配置，脚本会自动读取，无需显式传递。直接执行以下命令即可。
 
@@ -100,7 +100,27 @@ giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 > **极其重要**：stdout 中的 Markdown 链接（`[查看图片 N](...)`）**必须原封不动保留**，禁止提取 URL、禁止改写链接格式、禁止发送裸 URL。
 
-**如果 Cron 注册失败**：等待 60 秒后手动执行一次查询命令 `python3 scripts/seedream_api.py --query --task-id <task_id>`，根据上述处理逻辑处理结果。
+**如果 Cron 注册失败**：直接进入 Phase 3。
+
+---
+
+### Phase 3：同步等待（乐观路径，兜底 Cron 未触发）
+
+**目的**：防止 Cron 调度器未触发（已知平台 bug），确保用户一定收到结果。
+
+**无论 Cron 是否注册成功，都必须执行此步骤。**
+
+```bash
+python3 scripts/seedream_api.py --query --task-id <task_id> --poll --max-wait 180
+```
+
+**处理逻辑**：
+
+- 返回纯文本（图片就绪/失败消息）→ **原封不动发送给用户**，取消 Cron
+- 空 stdout → Cron 已推送，取消 Cron，不发消息
+- exec 超时 → Cron 继续轮询即可
+
+> 脚本内部每 5 秒查询一次，如果 Cron 已推送（`.sent` 标记存在）会自动退出，不会重复推送。
 
 ---
 
@@ -206,7 +226,7 @@ multiSelect: false
 
 ### 步骤 4: 执行生成并展示
 
-按照「执行流程（Phase 1 提交 + Phase 2 Cron）」章节执行：先发消息 → Phase 1 提交 → 注册 Cron → Cron 轮询发结果。
+按照「执行流程（三阶段双路径）」章节执行：先发消息 → Phase 1 提交 → Phase 2 注册 Cron → Phase 3 同步等待。
 
 收到结果后将 exec 返回的 stdout 原封不动发给用户。
 
