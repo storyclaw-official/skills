@@ -4,6 +4,19 @@
 
 ---
 
+## [3.2.0] - 2026-02-25
+
+### 新增
+- `giggle-image`：`seedream_api.py` 新增 `--poll` 参数，`--query --poll` 模式支持同步轮询等待任务完成（每 5 秒查询，默认最多 180 秒）
+- `giggle-image` SKILL.md：新增 Phase 3 同步兜底路径（`--query --task-id <id> --poll`），与 Cron 双路径确保结果送达，架构升级为三阶段双路径（对齐 giggle-drama）
+- `giggle-image`：新建 `scripts/requirements.txt`（`requests>=2.31.0`），统一依赖声明
+
+### 修复
+- `giggle-drama` SKILL.md：重试场景提醒改为引导用户去网页端专业模式继续制作，明确告知重试将创建新任务、之前费用不退，使用敬语"您"
+- 修复 OpenClaw Cron `armTimer skipped` bug 导致 `giggle-image` 结果不推送的问题（平台 Cron 注册成功但 `nextRunAtMs` 为 null，定时器未触发）
+
+---
+
 ## [3.1.0] - 2026-02-25
 
 ### 修复
