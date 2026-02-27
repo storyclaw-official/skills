@@ -294,16 +294,18 @@ class MVTrusteeAPI:
             return query_result
 
         if status in ("failed", "error"):
-            # 自动找出失败的子步骤
+            # 自动找出失败的子步骤（用 found 标志确保找到第一个即停止）
             failed_step = current_step
+            found = False
             for step in data.get("steps", []):
                 for sub in step.get("sub_steps", []):
                     if sub.get("status") == "failed" or sub.get("error"):
                         candidate = sub.get("step", "")
                         if candidate:
                             failed_step = candidate
+                            found = True
                             break
-                if failed_step != current_step:
+                if found:
                     break
 
             if not failed_step:

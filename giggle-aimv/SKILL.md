@@ -234,6 +234,16 @@ MV 生成完成
 python3 scripts/trustee_api.py start --project-id <id>
 ```
 
+**根据 start --project-id 返回的 status 决定后续动作**：
+
+| 返回 status | 含义 | 后续动作 |
+|-------------|------|---------|
+| `started` | 新项目创建成功 | 写记忆 → 注册 Cron → Phase 3 |
+| `retrying` | 已提交重试 | **重新注册 Cron**（原 Cron 已取消）→ 告知用户"正在重试" |
+| `running` | 项目仍在进行中（如重启恢复）| **重新注册 Cron** → 告知用户"已恢复监控" |
+| `completed` | 已完成 | 直接发结果给用户，无需 Cron |
+| code != 200 | 出错 | 告知错误，等待用户指示 |
+
 **判断是否有 project_id**：
 - 记忆中有 → 直接用 `start --project-id <id>`
 - 日志文件名中有（`logs/<project_id>_*.log`）→ 提取后用 `start --project-id <id>`
@@ -243,7 +253,7 @@ python3 scripts/trustee_api.py start --project-id <id>
 
 ### Gateway 重启后恢复
 
-1. **记忆中有 project_id** → 直接执行 `start --project-id <id>`，脚本自动路由
+1. **记忆中有 project_id** → 执行 `start --project-id <id>`，根据返回 status 决定后续（见上表）
 2. **没有** → 告知用户，询问是否重新生成
 
 ### 提交任务 API 请求示例（提示词模式）
