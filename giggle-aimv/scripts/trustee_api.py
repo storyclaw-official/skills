@@ -266,6 +266,71 @@ class MVTrusteeAPI:
             print(f"请求失败: {e}")
             return {"code": -1, "msg": str(e)}
 
+    def resume_project(self, project_id: str) -> Dict[str, Any]:
+        """
+        恢复/重试已有项目：查询状态后自动路由
+        - 已完成 → 直接返回结果
+        - 已失败 → 自动找到失败步骤并调用 retry
+        - 进行中 → 返回当前状态（模型可继续注册 Cron）
+        """
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 查询已有项目 {project_id} 状态...", file=sys.stderr)
+        query_result = self.query_progress(project_id)
+        code = query_result.get("code")
+        if isinstance(code, str):
+            code = int(code) if code.isdigit() else 0
+        if code != 0 and code != 200:
+            return query_result
+
+        data = query_result.get("data", {}) or {}
+        status = data.get("status", "unknown")
+        current_step = data.get("current_step", "")
+
+        if status == "completed":
+            video_asset = data.get("video_asset", {})
+            if video_asset and video_asset.get("download_url"):
+                safe_asset = self._encode_asset_urls(video_asset)
+                data["video_asset"] = safe_asset
+                query_result["data"] = data
+            return query_result
+
+        if status in ("failed", "error"):
+            # 自动找出失败的子步骤
+            failed_step = current_step
+            for step in data.get("steps", []):
+                for sub in step.get("sub_steps", []):
+                    if sub.get("status") == "failed" or sub.get("error"):
+                        candidate = sub.get("step", "")
+                        if candidate:
+                            failed_step = candidate
+                            break
+                if failed_step != current_step:
+                    break
+
+            if not failed_step:
+                return {"code": -1, "msg": f"项目 {project_id} 已失败，但无法确定失败步骤，请手动检查", "data": {"project_id": project_id, "status": status}}
+
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 项目失败（步骤: {failed_step}），自动重试...", file=sys.stderr)
+            retry_result = self.retry(project_id=project_id, current_step=failed_step)
+            retry_code = retry_result.get("code")
+            if isinstance(retry_code, str):
+                retry_code = int(retry_code) if retry_code.isdigit() else 0
+            if retry_code == 0 or retry_code == 200:
+                return {
+                    "code": 200,
+                    "status": "retrying",
+                    "msg": f"已自动重试步骤 {failed_step}，请继续用 Cron 查询进度",
+                    "data": {"project_id": project_id, "retried_step": failed_step}
+                }
+            return retry_result
+
+        # 进行中
+        return {
+            "code": 200,
+            "status": "running",
+            "msg": f"项目进行中（状态: {status}，步骤: {current_step}）",
+            "data": {"project_id": project_id, "status": status, "current_step": current_step}
+        }
+
     def create_and_submit(
         self,
         music_generate_type: str,
@@ -687,10 +752,11 @@ def main():
     rp.add_argument("--current-step", required=True, help="如 music-generate, storyboard, shot, editor")
 
     # start 命令（Phase 1：快速创建项目并提交任务，< 10秒）
-    startp = sub.add_parser("start", help="Phase 1：快速创建项目并提交任务（< 10秒）")
-    startp.add_argument("--mode", required=True, choices=["prompt", "custom", "upload"])
-    startp.add_argument("--aspect", required=True, choices=["16:9", "9:16"])
-    startp.add_argument("--project-name", required=True)
+    startp = sub.add_parser("start", help="Phase 1：快速创建项目并提交任务（< 10秒）。传 --project-id 时自动恢复/重试已有项目，无需额外判断")
+    startp.add_argument("--project-id", default="", help="已有项目ID（可选）；传入时脚本自动查询状态并路由，无需其他参数")
+    startp.add_argument("--mode", choices=["prompt", "custom", "upload"])
+    startp.add_argument("--aspect", choices=["16:9", "9:16"], default="")
+    startp.add_argument("--project-name", default="")
     startp.add_argument("--reference-image", default="")
     startp.add_argument("--reference-image-url", default="")
     startp.add_argument("--scene-description", default="")
@@ -770,9 +836,11 @@ def main():
             r = api.query_progress(args.project_id)
             data = (r.get("data") or {}) if r else {}
             status = data.get("status", "")
-            # 自动支付：价格算出来后 pay_status 变 pending，直接付款无需 agent 介入
+            # 自动支付：价格算出来后自动付款，无需 agent 介入
+            # 服务端可能返回 pay_status="pending"/"unpaid" 或 current_step 含 "pay"
             pay_status = data.get("pay_status", "")
-            if pay_status == "pending":
+            current_step = data.get("current_step", "")
+            if pay_status in ("pending", "unpaid") or (current_step and "pay" in current_step.lower()):
                 pay_r = api.pay(args.project_id)
                 pay_code = pay_r.get("code")
                 if isinstance(pay_code, str):
@@ -816,22 +884,30 @@ def main():
         print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
 
     elif args.command == "start":
-        r = api.create_and_submit(
-            music_generate_type=args.mode,
-            aspect=args.aspect,
-            project_name=args.project_name,
-            reference_image=args.reference_image,
-            reference_image_url=args.reference_image_url,
-            scene_description=args.scene_description,
-            subtitle_enabled=args.subtitle,
-            prompt=args.prompt,
-            vocal_gender=args.vocal_gender,
-            instrumental=args.instrumental,
-            lyrics=args.lyrics,
-            style=args.style,
-            title=args.title,
-            music_asset_id=args.music_asset_id,
-        )
+        if args.project_id:
+            # 恢复模式：传入已有 project_id，脚本自动查询状态并路由（失败→retry，进行中→返回状态）
+            r = api.resume_project(args.project_id)
+        else:
+            # 新建模式：校验必要参数
+            if not args.mode or not args.aspect or not args.project_name:
+                print("错误: 新建项目需要提供 --mode, --aspect, --project-name", file=sys.stderr)
+                sys.exit(1)
+            r = api.create_and_submit(
+                music_generate_type=args.mode,
+                aspect=args.aspect,
+                project_name=args.project_name,
+                reference_image=args.reference_image,
+                reference_image_url=args.reference_image_url,
+                scene_description=args.scene_description,
+                subtitle_enabled=args.subtitle,
+                prompt=args.prompt,
+                vocal_gender=args.vocal_gender,
+                instrumental=args.instrumental,
+                lyrics=args.lyrics,
+                style=args.style,
+                title=args.title,
+                music_asset_id=args.music_asset_id,
+            )
         print(json.dumps(r, indent=2, ensure_ascii=False) if args.pretty else json.dumps(r, ensure_ascii=False))
         code = r.get("code")
         if isinstance(code, str):

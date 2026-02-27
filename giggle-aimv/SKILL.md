@@ -124,7 +124,12 @@ python3 scripts/trustee_api.py start \
 giggle-aimv project_id: xxx（状态：生成中，提交时间：YYYY-MM-DD HH:mm）
 ```
 
-如果 start 失败（code != 200）：告知错误信息，询问用户是否重试，**不执行后续步骤**。
+如果 start 成功（code == 200）：将 `project_id` 写入记忆后继续 Phase 2。
+
+如果 start 失败（code != 200）：
+- 响应中**有 project_id** → 告知错误，**再次执行 `start --project-id <id>`**，脚本自动重试
+- 响应中**无 project_id**（create 阶段失败）→ 告知错误，询问用户是否重新提交，用户确认后重新 `start`
+- **不执行后续步骤**
 
 ---
 
@@ -214,25 +219,32 @@ MV 生成完成
 
 ### 失败处理
 
+> ⚠️ **核心原则：有 project_id 就用 `start --project-id <id>`，脚本自动判断状态并路由，绝不手动重新 `start`（会创建新项目浪费积分）**
+
 | 场景 | 处理方式 |
 |------|---------|
-| `start` 失败 | 告知错误，询问用户是否重试 |
-| 支付失败 | "积分不足，请充值后告诉我重试" |
-| 子步骤失败 | 询问用户是否重试，可用 `retry --project-id <id> --current-step <step>` |
-| 超时（1小时） | "生成超时，project_id=xxx，可稍后查询" |
+| 有 project_id，任意失败 | `python3 scripts/trustee_api.py start --project-id <id>`（脚本自动查状态→retry） |
+| 积分不足 | "积分不足，请充值后告诉我"，充值后执行 `start --project-id <id>` |
+| 超时（1小时） | "生成超时，project_id=xxx，可稍后继续查询" |
+| 完全无 project_id（create 阶段失败） | 告知错误，用户确认后**重新完整执行 `start`**（带所有参数） |
 
-**重试步骤**：
+**有 project_id 时统一恢复命令**：
 ```bash
-python3 scripts/trustee_api.py retry --project-id <id> --current-step shot
-# current_step 可选：music-generate / storyboard / shot / editor
+# 脚本自动：查询状态 → 已失败则找出失败步骤并 retry → 进行中则返回状态
+python3 scripts/trustee_api.py start --project-id <id>
 ```
+
+**判断是否有 project_id**：
+- 记忆中有 → 直接用 `start --project-id <id>`
+- 日志文件名中有（`logs/<project_id>_*.log`）→ 提取后用 `start --project-id <id>`
+- 完全没有（`start` 在 `create` 阶段就失败）→ 才重新完整 `start`
 
 ---
 
 ### Gateway 重启后恢复
 
-1. **记忆中有 project_id** → 直接执行 `query --project-id xxx`，**绝不重新 start**
-2. **两者都无** → 告知用户，询问是否重新生成
+1. **记忆中有 project_id** → 直接执行 `start --project-id <id>`，脚本自动路由
+2. **没有** → 告知用户，询问是否重新生成
 
 ### 提交任务 API 请求示例（提示词模式）
 
