@@ -268,6 +268,9 @@ class SeedreamAPI:
         except requests.exceptions.RequestException as e:
             raise Exception(f"查询失败: {str(e)}")
 
+    # 别名：防止 Agent 用 inline Python 时调用错误方法名
+    query = query_task
+
     def wait_for_completion(
         self,
         task_id: str,
@@ -480,7 +483,7 @@ def print_output(image_urls: List[str], prompt: str, output_json: bool = False, 
 
     if output_json:
         # 预格式化 Markdown 链接，避免 agent 提取裸 URL
-        display_lines = [f"👉 [查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
+        display_lines = [f"[查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
         display = "\n".join(display_lines)
         output_data = {
             "prompt": prompt,
@@ -588,7 +591,7 @@ def main():
                 count = _increment_query_count(args.task_id)
                 if count > 10:
                     prompt_text = _load_task_prompt(args.task_id) or "图片"
-                    print(f"⏰ 图片生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
+                    print(f"图片生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟，未能完成。\n\n建议重新生成，我随时待命~")
                     sys.exit(0)
 
                 try:
@@ -616,14 +619,14 @@ def main():
                     _write_image_log(args.task_id, log_prompt, "empty_urls",
                                      datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                      error_msg="completed but no image urls")
-                    print(f"😔 生成遇到了问题\n\n关于「{prompt_text}」的创作虽已完成但未返回图片。\n\n💡 建议重新生成试试，我随时待命~")
+                    print(f"生成遇到了问题\n\n关于「{prompt_text}」的创作虽已完成但未返回图片。\n\n建议重新生成试试，我随时待命~")
                     sys.exit(0)
                 _mark_image_sent(args.task_id)
                 view_urls = [to_view_url(u) for u in image_urls]
                 prompt_text = _load_task_prompt(args.task_id) or "图片"
                 view_count = len(view_urls)
-                display_lines = [f"👉 [查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
-                print("🎨 图片已就绪！\n")
+                display_lines = [f"[查看图片 {i+1}]({url})" for i, url in enumerate(view_urls)]
+                print("图片已就绪！✨\n")
                 if view_count > 1:
                     print(f"关于「{prompt_text}」的创作已完成，共 {view_count} 张 ✨\n")
                 else:
@@ -650,7 +653,7 @@ def main():
                 _write_image_log(args.task_id, log_prompt, "failed",
                                  datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                  error_msg=err_msg)
-                print(f"😔 生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{err_msg}\n\n💡 建议调整描述后重新尝试，我随时待命~")
+                print(f"生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{err_msg}\n\n建议调整描述后重新尝试，我随时待命~")
                 sys.exit(0)
             else:
                 # 进行中（running/processing/pending）→ exit(0) 避免 exec failed 通知

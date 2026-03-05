@@ -1110,9 +1110,11 @@ def main():
             # 单次查询也加 .sent 防重复
             data = (result.get("data") or {}) if result else {}
             status = data.get("status", "")
-            # 自动支付：价格算出来后 pay_status 变 pending，直接付款无需 agent 介入
+            # 自动支付：价格算出来后自动付款，无需 agent 介入
+            # 服务端可能返回 pay_status="pending"/"unpaid" 或 current_step 含 "pay"
             pay_status = data.get("pay_status", "")
-            if pay_status == "pending":
+            current_step = data.get("current_step", "")
+            if pay_status in ("pending", "unpaid") or (current_step and "pay" in current_step.lower()):
                 pay_r = api.pay(
                     project_id=args.project_id,
                     video_first_model="grok",

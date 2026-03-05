@@ -11,6 +11,8 @@ metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},
 
 **API 密钥**: 从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件读取。
 
+> **禁止 inline Python**：所有命令必须通过 `exec` 工具直接执行命令行脚本，**严禁**使用 `python3 << 'EOF'` 或 heredoc 方式运行内联代码。内联代码会导致路径错误和方法名不匹配。
+
 ## 执行流程（三阶段双路径）
 
 图像生成通常需要 30-60 秒。采用「快速提交 + Cron 轮询 + 同步兜底」三阶段架构，确保用户一定收到结果。
@@ -68,6 +70,8 @@ giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 ### Phase 2：注册 Cron（45 秒间隔）
 
+> **禁止 inline Python**：Cron payload 中的 exec 命令必须直接调用 `python3 scripts/seedream_api.py`，**严禁**使用 heredoc 内联代码。
+
 使用 `cron` 工具注册轮询任务。**必须严格按照以下参数格式，不得修改任何字段名或添加额外字段**：
 
 ```json
@@ -110,6 +114,8 @@ giggle-image task_id: xxx（提交时间：YYYY-MM-DD HH:mm）
 
 **无论 Cron 是否注册成功，都必须执行此步骤。**
 
+> **禁止 inline Python**：必须直接执行以下命令行脚本，**严禁**使用 heredoc 内联代码。
+
 ```bash
 python3 scripts/seedream_api.py --query --task-id <task_id> --poll --max-wait 180
 ```
@@ -140,22 +146,22 @@ python3 scripts/seedream_api.py --query --task-id <task_id> --poll --max-wait 18
 
 **成功示例**：
 ```
-🎨 图片已就绪！
+图片已就绪！✨
 
 关于「美丽的校园风景」的创作已完成 ✨
 
-👉 [查看图片 1](https://assets.giggle.pro/...)
+[查看图片 1](https://assets.giggle.pro/...)
 
 如需调整，随时告诉我~
 ```
 
 **失败示例**：
 ```
-😔 生成遇到了问题
+生成遇到了问题
 
 关于「美丽的校园风景」的创作未能完成：输入内容可能包含敏感信息，被服务端拦截
 
-💡 建议调整描述后重新尝试，我随时待命~
+建议调整描述后重新尝试，我随时待命~
 ```
 
 **转发规则**：

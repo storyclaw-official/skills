@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### 新增
+- `giggle-image` `seedream_api.py`：新增 `query = query_task` 别名，防止 Agent 使用 inline Python 时调用错误方法名
+
+### 修复
+- `giggle-drama` `trustee_api.py`：自动支付触发条件扩展，新增对 `pay_status="unpaid"` 和 `current_step` 含 "pay" 字段的检测，覆盖服务端多种返回格式
+- `giggle-image` `seedream_api.py`：移除输出文本中部分 emoji（`👉`、`🎨`、`😔`、`⏰`），统一输出为无 emoji 的纯文本风格
+
+### 文档
+- `giggle-image` SKILL.md：三处关键步骤新增「禁止 inline Python」明确警告，要求 Agent 必须通过 `exec` 工具直接执行命令行脚本，禁止 heredoc/内联代码方式
+- 新增 `USAGE.md` 用户使用指南：面向普通用户，涵盖技能安装、API Key 获取与配置、各技能使用说明（giggle-drama/aimv/music/image/screenplay）及常见问题排查
+- `env.example`（根目录）及 `giggle-drama/giggle-aimv/giggle-music/giggle-image` 各技能目录：文件头部新增 OpenClaw 配置说明，引导 OpenClaw 用户使用 `~/.openclaw/openclaw.json` 配置 API Key，明确此文件仅供本地独立调试使用
+- 新增 `giggle-skills-guide.pdf`：由 `USAGE.md` 生成的 PDF 版本用户指南，供离线阅读和分发
+
 ---
 
 ## [3.2.0] - 2026-02-25
