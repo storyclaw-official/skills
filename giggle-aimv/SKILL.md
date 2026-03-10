@@ -273,7 +273,14 @@ result = api.execute_workflow(
 }
 ```
 
-说明：`pay_status` 为 `pending` 时需调用支付接口；所有 `steps` 完成后 `video_asset.download_url` 有值，可下载视频。
+说明：`pay_status` 为 `pending` 时需调用支付接口；所有 `steps` 完成后 `video_asset.download_url` 有值，需要返回完整的下载链接。正确返回：
+```json
+https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9hc3NldHMuZ2lnZ2xlLnByby9wcml2YXRlL2FpX2RpcmVjdG9yLzM0OGU0OTU2YzdiZDRmNzYzYi9xempjN2d3a3BmLm1wNCoiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3NzMyNzM1OTkwMDB9fX1dfQ__&Key-Pair-Id=K36RVPYROCSUEJ&Signature=StUnhxVXvyK-KRDF3NAWC51nCOKYE31seHnsNr5B%7E3KM4QhtF9rZOt1GzYx-WW7Yt3r4wxtjuk%7E6KxVtbgTzCAHxjweKzLwyEoIJpeZ6xX36jmPwtk8381e4BIwwa%7EjxbO3pKkOS8ZPIs-5JirJRqOAU7bOT8tf%7EHBMZF11WgbnbkI7jmBibefh0cvjhBrhQl681YxcFozXw5PbrlPQpwGe90tOrWbhBKXjcXQGJa8SSLf2NDwZucjnTK40piDcAxJoAHCRd-q5AYhdIVMxfVY0kWndXHKYPRBwzX0iyNDcfcDhJdAnlZlBPP9l8c0F9yATKhhAFLMaJdt8Qybse4g__&response-content-disposition=attachment
+```
+错误返回：
+```json
+https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4
+```
 
 ### 支付 API 请求与响应示例
 
