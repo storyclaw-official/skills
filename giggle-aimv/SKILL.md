@@ -7,6 +7,22 @@ description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词
 
 此 skill 用于调用 MV 托管模式 API，执行完整的 MV 生成工作流。**创建项目与提交任务已在脚本内合并为一步**，AI 只需调用 `execute_workflow` 一次，切勿分开调用创建和提交。
 
+## 首次使用配置（必读）
+
+**执行任何操作前，必须先检查用户是否已配置 API 密钥。**
+
+**API Key 获取方式**：登录 [Giggle.pro](https://giggle.pro/) 平台，在个人中心或账户设置中获取 API 密钥。
+
+配置方式（二选一）：
+1. **项目根目录 `.env`**：复制 `env.example` 为 `.env`，填写 `GIGGLE_API_KEY=your_api_key`
+2. **环境变量**：`export GIGGLE_API_KEY=your_api_key`
+
+**检查步骤**：
+1. 确认用户已在 `.env` 或环境变量中配置 `GIGGLE_API_KEY`
+2. 如果未配置，**必须提示用户**：
+   > 您好！在使用 MV 生成功能前，需要先配置 API 密钥。请先到 [Giggle.pro](https://giggle.pro/) 平台获取 API Key，然后在项目根目录创建 `.env` 文件（可参考 `env.example`），添加 `GIGGLE_API_KEY=your_api_key`，或通过环境变量设置。
+3. 等待用户确认已配置后，再执行后续工作流
+
 ## 三种音乐生成模式
 
 | 模式 | music_generate_type | 必需参数 | 说明 |

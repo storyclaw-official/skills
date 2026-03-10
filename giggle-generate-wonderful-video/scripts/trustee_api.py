@@ -9,24 +9,11 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 PROJECT_TYPE = "wonderful-video"  # 固定项目类型
-
-
-def load_config() -> Dict[str, Any]:
-    """加载配置文件，若不存在则创建默认配置"""
-    default_config = {"x_auth": ""}
-    if not os.path.exists(CONFIG_PATH):
-        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(default_config, f, indent=2, ensure_ascii=False)
-        return default_config
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        config = json.load(f)
-    return config
 
 
 def _check_requests():
@@ -45,20 +32,40 @@ class WonderfulVideoAPI:
 
     def __init__(self):
         requests = _check_requests()
-        config = load_config()
-        x_auth = config.get("x_auth", "")
-        if not x_auth:
-            print("错误: 未配置 x-auth 鉴权令牌", file=sys.stderr)
-            print(f"请在配置文件中填写：{CONFIG_PATH}", file=sys.stderr)
-            print('配置格式：{"x_auth": "你的令牌"}', file=sys.stderr)
-            sys.exit(1)
-
+        self._load_env()
+        self.api_key = os.getenv("GIGGLE_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "未找到 API 密钥。请确保：\n"
+                "1. 在项目根目录创建 .env 文件，添加 GIGGLE_API_KEY=your_api_key\n"
+                "2. 或通过环境变量设置 GIGGLE_API_KEY"
+            )
         self.base_url = "https://giggle.pro"
         self.session = requests.Session()
         self.session.headers.update({
             'Content-Type': 'application/json',
-            'x-auth': x_auth
+            'x-auth': self.api_key
         })
+
+    def _load_env(self):
+        """从 .env 文件加载环境变量（支持项目根目录、技能目录、skills 目录）"""
+        try:
+            from dotenv import load_dotenv
+            script_dir = Path(__file__).parent
+            env_paths = [
+                Path.cwd() / ".env",
+                script_dir.parent / ".env",
+                script_dir.parent.parent / ".env",
+            ]
+            for env_path in env_paths:
+                if env_path.exists():
+                    load_dotenv(env_path)
+                    break
+            else:
+                load_dotenv()
+        except ImportError:
+            print("警告: 未安装 python-dotenv 库", file=sys.stderr)
+            print("请运行: pip install python-dotenv", file=sys.stderr)
 
     def _create_and_submit(self, project_name: str, diy_story: str, aspect: str,
                            video_duration: str, language: str,

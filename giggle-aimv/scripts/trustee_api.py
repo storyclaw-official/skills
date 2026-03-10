@@ -6,8 +6,10 @@ MV 托管模式 API 调用脚本
 
 import argparse
 import json
+import os
 import sys
 import time
+from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
@@ -28,9 +30,37 @@ class MVTrusteeAPI:
 
     def __init__(self):
         requests = _check_requests()
+        self._load_env()
+        self.api_key = os.getenv("GIGGLE_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "未找到 API 密钥。请确保：\n"
+                "1. 在项目根目录创建 .env 文件，添加 GIGGLE_API_KEY=your_api_key\n"
+                "2. 或通过环境变量设置 GIGGLE_API_KEY"
+            )
         self.base_url = "https://giggle.pro"
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
+
+    def _load_env(self):
+        """从 .env 文件加载环境变量（支持项目根目录、技能目录、skills 目录）"""
+        try:
+            from dotenv import load_dotenv
+            script_dir = Path(__file__).parent
+            env_paths = [
+                Path.cwd() / ".env",
+                script_dir.parent / ".env",
+                script_dir.parent.parent / ".env",
+            ]
+            for env_path in env_paths:
+                if env_path.exists():
+                    load_dotenv(env_path)
+                    break
+            else:
+                load_dotenv()
+        except ImportError:
+            print("警告: 未安装 python-dotenv 库", file=sys.stderr)
+            print("请运行: pip install python-dotenv", file=sys.stderr)
 
     def create_project(self, name: str, aspect: str) -> Dict[str, Any]:
         """创建 MV 项目"""
@@ -42,7 +72,7 @@ class MVTrusteeAPI:
             "mode": "trustee"
         }
         try:
-            headers = {"x-auth": "sk_prod_c2tfbGl2ZV84ZDFhMmIzYzRkNWU2ZjcwODlhYmNkZWZnaGk="}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -176,7 +206,7 @@ class MVTrusteeAPI:
             data["music_asset_id"] = music_asset_id
 
         try:
-            headers = {"x-auth": "sk_prod_c2tfbGl2ZV84ZDFhMmIzYzRkNWU2ZjcwODlhYmNkZWZnaGk="}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -196,7 +226,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/query"
         params = {"project_id": project_id}
         try:
-            headers = {"x-auth": "sk_prod_c2tfbGl2ZV84ZDFhMmIzYzRkNWU2ZjcwODlhYmNkZWZnaGk="}
+            headers = {"x-auth": self.api_key}
             response = self.session.get(url, params=params, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -216,7 +246,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/pay"
         data = {"project_id": project_id}
         try:
-            headers = {"x-auth": "sk_prod_c2tfbGl2ZV84ZDFhMmIzYzRkNWU2ZjcwODlhYmNkZWZnaGk="}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
@@ -236,7 +266,7 @@ class MVTrusteeAPI:
         url = f"{self.base_url}/api/v1/trustee_mode/mv/retry"
         data = {"project_id": project_id, "current_step": current_step}
         try:
-            headers = {"x-auth": "sk_prod_c2tfbGl2ZV84ZDFhMmIzYzRkNWU2ZjcwODlhYmNkZWZnaGk="}
+            headers = {"x-auth": self.api_key}
             response = self.session.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
