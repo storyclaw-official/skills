@@ -1,190 +1,190 @@
 ---
 name: giggle-generation-image
-description: Generate AI images via Generation API with multiple models (Seedream, Midjourney, Nano Banana). Supports text-to-image and image-to-image. Use when user needs to create or generate images. Use cases: (1) generate from text description, (2) generate with reference images, (3) custom model, aspect ratio, resolution. Trigger keywords: generate image, draw, create image, AI art, midjourney, seedream, nano-banana.
+description: 通过 Generation API 使用多种模型（Seedream、Midjourney、Nano Banana）生成 AI 图像。支持文生图和图生图。当用户需要创建或生成图像时使用。使用场景：(1) 根据文字描述生成，(2) 使用参考图生成，(3) 自定义模型、画幅比例、分辨率。触发词：生成图片、画画、创建图片、AI 艺术、midjourney、seedream、nano-banana。
 ---
 
-# Giggle Generation Image (Multi-Model Image Generation)
+# Giggle 图像生成（多模型）
 
-Generate AI images via Generation API on giggle.pro platform, supporting multiple models.
+通过 giggle.pro 平台的 Generation API 生成 AI 图像，支持多种模型。
 
-**API Key**: Read from environment variable `GIGGLE_API_KEY` or project root `.env` file.
+**API Key**：从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件中读取。
 
-> **No inline Python**: All commands must be executed via `exec` tool directly. **Never** use `python3 << 'EOF'` or heredoc for inline code.
+> **禁止内联 Python**：所有命令必须通过 `exec` 工具直接执行。**切勿**使用 `python3 << 'EOF'` 或 heredoc 内联代码。
 
-## Supported Models
+## 支持的模型
 
-| Model | Description |
+| 模型 | 说明 |
 |------|------|
-| seedream45 | Seedream model, realistic and creative |
-| midjourney | Midjourney style |
-| nano-banana-2 | Nano Banana 2 model |
-| nano-banana-2-fast | Nano Banana 2 fast version |
+| seedream45 | Seedream 模型，写实与创意兼备 |
+| midjourney | Midjourney 风格 |
+| nano-banana-2 | Nano Banana 2 模型 |
+| nano-banana-2-fast | Nano Banana 2 快速版 |
 
 ---
 
-## Execution Flow (Three-Phase Dual-Path)
+## 执行流程（三阶段双路径）
 
-Image generation typically takes 30-120 seconds. Uses "quick submit + Cron poll + sync fallback" three-phase architecture.
+图像生成通常需要 30–120 秒。采用「快速提交 + Cron 轮询 + 同步兜底」三阶段架构。
 
-> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API key is configured via system environment and scripts auto-read it.
+> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 通过系统环境配置，脚本会自动读取。
 
 ---
 
-### Phase 1: Submit Task (exec completes in < 10 sec)
+### 阶段 1：提交任务（exec 在 10 秒内完成）
 
-**First send message to user**: "Image generation in progress, usually 30-120 seconds, results will be sent automatically."
+**先向用户发送消息**：「图像生成进行中，通常需要 30–120 秒，结果将自动发送。」
 
 ```bash
-# Text-to-image (default seedream45)
+# 文生图（默认 seedream45）
 python3 scripts/generation_api.py \
-  --prompt "description" --aspect-ratio 16:9 \
+  --prompt "描述" --aspect-ratio 16:9 \
   --model seedream45 --resolution 2K \
   --no-wait --json
 
-# Text-to-image - Midjourney
+# 文生图 - Midjourney
 python3 scripts/generation_api.py \
-  --prompt "description" --model midjourney \
+  --prompt "描述" --model midjourney \
   --aspect-ratio 16:9 --resolution 2K \
   --no-wait --json
 
-# Image-to-image - requires reference image URL
+# 图生图 - 需要参考图 URL
 python3 scripts/generation_api.py \
-  --prompt "convert to oil painting style, keep composition" \
+  --prompt "转换为油画风格，保持构图" \
   --reference-images "https://example.com/photo.jpg" \
   --model nano-banana-2-fast \
   --no-wait --json
 
-# Generate multiple images
+# 批量生成多张图
 python3 scripts/generation_api.py \
-  --prompt "description" --generate-count 4 \
+  --prompt "描述" --generate-count 4 \
   --no-wait --json
 ```
 
-Response example:
+响应示例：
 ```json
 {"status": "started", "task_id": "xxx"}
 ```
 
-**Immediately store task_id in memory** (`addMemory`):
+**立即将 task_id 存入记忆**（`addMemory`）：
 ```
 giggle-generation-image task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```
 
 ---
 
-### Phase 2: Register Cron (45 sec interval)
+### 阶段 2：注册 Cron（45 秒间隔）
 
-Use `cron` tool to register poll task. **Must follow parameter format strictly**:
+使用 `cron` 工具注册轮询任务。**必须严格遵循参数格式**：
 
 ```json
 {
   "action": "add",
   "job": {
-    "name": "giggle-generation-image-<first 8 chars of task_id>",
+    "name": "giggle-generation-image-<task_id 前 8 位>",
     "schedule": {
       "kind": "every",
       "everyMs": 45000
     },
     "payload": {
       "kind": "systemEvent",
-      "text": "Image task poll: Execute exec python3 scripts/generation_api.py --query --task-id <full task_id>, process stdout per Cron logic. If stdout is non-JSON plain text, send to user and remove Cron. If stdout is JSON, do not send message, keep waiting. If stdout is empty, remove Cron immediately."
+      "text": "图像任务轮询：执行 exec python3 scripts/generation_api.py --query --task-id <完整 task_id>，按 Cron 逻辑处理 stdout。若 stdout 为非 JSON 纯文本，发送给用户并移除 Cron。若 stdout 为 JSON，不发送消息，继续等待。若 stdout 为空，立即移除 Cron。"
     },
     "sessionTarget": "main"
   }
 }
 ```
 
-**Cron trigger handling** (judge by exec stdout):
+**Cron 触发处理**（根据 exec stdout 判断）：
 
-| stdout pattern | Action |
+| stdout 模式 | 动作 |
 |------------|------|
-| Non-empty plain text (not starting with `{`) | **Forward stdout to user as-is**, **remove Cron** |
-| Empty stdout | Already pushed, **remove Cron immediately, no message** |
-| JSON (starts with `{`, has `"status"` field) | No message, do not remove Cron, keep waiting |
+| 非空纯文本（不以 `{` 开头） | **原样转发给用户**，**移除 Cron** |
+| stdout 为空 | 已推送，**立即移除 Cron，不发送消息** |
+| JSON（以 `{` 开头，含 `"status"` 字段） | 不发送消息，不移除 Cron，继续等待 |
 
 ---
 
-### Phase 3: Sync Wait (optimistic path, fallback when Cron does not trigger)
+### 阶段 3：同步等待（乐观路径，Cron 未触发时的兜底）
 
-**Must execute this step regardless of Cron registration success.**
+**无论 Cron 是否注册成功，都必须执行此步骤。**
 
 ```bash
 python3 scripts/generation_api.py --query --task-id <task_id> --poll --max-wait 180
 ```
 
-**Handling**:
+**处理逻辑**：
 
-- Returns plain text (image ready/failure message) → **Forward to user as-is**, remove Cron
-- Empty stdout → Cron already pushed, remove Cron, no message
-- exec timeout → Cron continues polling
-
----
-
-## New Request vs Query Old Task
-
-**When user starts new image generation request**, **must execute Phase 1 to submit new task**, do not reuse old task_id from memory.
-
-**Only when user explicitly asks about previous task progress**, query old task_id from memory.
+- 返回纯文本（图像就绪/失败消息） → **原样转发给用户**，移除 Cron
+- stdout 为空 → Cron 已推送，移除 Cron，不发送消息
+- exec 超时 → Cron 继续轮询
 
 ---
 
-## Parameter Quick Reference
+## 新请求 vs 查询旧任务
 
-| Parameter | Default | Description |
+**当用户发起新的图像生成请求**时，**必须执行阶段 1 提交新任务**，不要复用记忆中的旧 task_id。
+
+**仅当用户明确询问之前任务的进度**时，才从记忆中查询旧 task_id。
+
+---
+
+## 参数速查
+
+| 参数 | 默认值 | 说明 |
 |-----|--------|------|
-| `--prompt` | required | Image description prompt |
-| `--model` | seedream45 | Models: seedream45, midjourney, nano-banana-2, nano-banana-2-fast |
-| `--aspect-ratio` | 16:9 | 16:9, 9:16, 1:1, 3:4, 4:3, 2:3, 3:2, 21:9 |
-| `--resolution` | 2K | Text-to-image resolution: 1K, 2K, 4K (image-to-image partially supported) |
-| `--generate-count` | 1 | Number of images to generate |
-| `--reference-images` | - | Image-to-image reference URL list |
-| `--watermark` | false | Whether to add watermark (image-to-image) |
+| `--prompt` | 必填 | 图像描述 prompt |
+| `--model` | seedream45 | 模型：seedream45、midjourney、nano-banana-2、nano-banana-2-fast |
+| `--aspect-ratio` | 16:9 | 16:9、9:16、1:1、3:4、4:3、2:3、3:2、21:9 |
+| `--resolution` | 2K | 文生图分辨率：1K、2K、4K（图生图部分支持） |
+| `--generate-count` | 1 | 生成的图像数量 |
+| `--reference-images` | - | 图生图参考 URL 列表 |
+| `--watermark` | false | 是否添加水印（图生图） |
 
 ---
 
-## Interaction Guide Flow
+## 交互引导流程
 
-**When user request is vague, guide per below steps. If user provided enough info, execute command directly.**
+**当用户请求较模糊时，按以下步骤引导。若用户已提供足够信息，可直接执行命令。**
 
-### Step 1: Model Selection
+### 步骤 1：模型选择
 
 ```
-Question: "Which model would you like to use?"
-header: "Image Model"
-options:
-- "seedream45 - realistic and creative (recommended)"
-- "midjourney - artistic style"
-- "nano-banana-2 - high quality"
-- "nano-banana-2-fast - fast generation"
+问题：「想使用哪个模型？」
+标题：「图像模型」
+选项：
+- "seedream45 - 写实与创意（推荐）"
+- "midjourney - 艺术风格"
+- "nano-banana-2 - 高品质"
+- "nano-banana-2-fast - 快速生成"
 multiSelect: false
 ```
 
-### Step 2: Aspect Ratio
+### 步骤 2：画幅比例
 
 ```
-Question: "What aspect ratio do you need?"
-header: "Aspect Ratio"
-options:
-- "16:9 - landscape (wallpaper/cover) (recommended)"
-- "9:16 - portrait (mobile)"
-- "1:1 - square"
-- "Other ratio"
+问题：「需要什么画幅比例？」
+标题：「画幅比例」
+选项：
+- "16:9 - 横屏（壁纸/封面）（推荐）"
+- "9:16 - 竖屏（手机）"
+- "1:1 - 方形"
+- "其他比例"
 multiSelect: false
 ```
 
-### Step 3: Generation Mode
+### 步骤 3：生成模式
 
 ```
-Question: "Do you need reference images?"
-header: "Generation Mode"
-options:
-- "No - text-to-image only"
-- "Yes - image-to-image (style transfer)"
+问题：「需要参考图片吗？」
+标题：「生成模式」
+选项：
+- "不需要 - 仅文生图"
+- "需要 - 图生图（风格迁移）"
 multiSelect: false
 ```
 
-### Step 4: Execute and Display
+### 步骤 4：执行并展示
 
-Follow execution flow: send message → Phase 1 submit → Phase 2 register Cron → Phase 3 sync wait.
+按执行流程：发送消息 → 阶段 1 提交 → 阶段 2 注册 Cron → 阶段 3 同步等待。
 
-Forward exec stdout to user as-is when result arrives.
+结果到达后将 exec stdout 原样转发给用户。

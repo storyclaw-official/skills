@@ -1,153 +1,153 @@
 ---
 name: giggle-generation-videos
-description: Use this skill whenever the user wants to generate a video, create a short film, or explore available video styles. Generates AI videos via Giggle.pro trustee mode V2. Trigger on: generate video, create video, make a short film, AI video, video from story, shoot a video, I have a story idea, short drama, narration video, cinematic video, what video styles are available. Supports three modes — drama (director), narration, and short-film — with configurable aspect ratio (16:9/9:16), duration, and style selection.
+description: 当用户希望生成视频、拍摄短片或查看可用视频风格时使用此技能。通过 Giggle.pro trustee 模式 V2 生成 AI 视频。触发词：生成视频、制作视频、拍短片、AI 视频、根据故事生成视频、拍视频、我有故事想法、短剧、解说视频、电影感视频、有哪些视频风格。支持三种模式：剧集（director）、解说（narration）、短片（short-film），可配置画幅比例（16:9/9:16）、时长和风格选择。
 ---
 
-# Video Generation (Trustee Mode V2)
+# 视频生成（Trustee 模式 V2）
 
-Calls the Giggle.pro Trustee Mode V2 API to run the full video generation workflow from project creation to final video.
+调用 Giggle.pro Trustee 模式 V2 API，从项目创建到最终视频完成，运行完整视频生成工作流。
 
-## First-Time Setup (Required)
+## 首次使用前的配置（必选）
 
-Before any operation, confirm the user has configured the API key so the workflow does not fail mid-way due to auth.
+在执行任何操作前，确认用户已配置 API Key，以免工作流因认证失败而中断。
 
-- **API Key**: Log in to [Giggle.pro](https://giggle.pro/) and obtain the API key from your account settings.
-- **Configuration (choose one)**:
-  1. **Project root `.env`**: Copy `env.example` to `.env` and set `GIGGLE_API_KEY=your_api_key`
-  2. **Environment variable**: `export GIGGLE_API_KEY=your_api_key`
+- **API Key**：登录 [Giggle.pro](https://giggle.pro/) 并在账号设置中获取 API Key。
+- **配置方式（任选其一）**：
+  1. **项目根目录 `.env`**：复制 `env.example` 为 `.env`，并设置 `GIGGLE_API_KEY=your_api_key`
+  2. **环境变量**：`export GIGGLE_API_KEY=your_api_key`
 
-**Check steps**:
+**检查步骤**：
 
-1. Confirm the user has configured `GIGGLE_API_KEY` in `.env` or environment variables.
-2. If not configured, **prompt the user**:
-   > Hi! Before using the video generation feature, you need to configure your API key. Please go to [Giggle.pro](https://giggle.pro/) to obtain an API Key, then create a `.env` file in the project root (see `env.example`), add `GIGGLE_API_KEY=your_api_key`, or set it via environment variable.
-3. Wait for user confirmation before proceeding with the workflow.
+1. 确认用户已在 `.env` 或环境变量中配置 `GIGGLE_API_KEY`。
+2. 若未配置，**提示用户**：
+   > 你好！在使用视频生成功能前，需要先配置 API Key。请前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，然后在项目根目录创建 `.env` 文件（参考 `env.example`），添加 `GIGGLE_API_KEY=your_api_key`，或通过环境变量设置。
+3. 等待用户确认后再继续工作流。
 
-## Generation Modes
+## 生成模式
 
-Three modes are supported. **Ask the user to choose a mode before starting the workflow**; if not specified, default to **drama mode** (`director`).
+支持三种模式。**在启动工作流前请用户选择模式**；若用户未指定，默认使用**剧集模式**（`director`）。
 
-| Mode | project_type | Description |
+| 模式 | project_type | 说明 |
 |------|-------------|-------------|
-| **Drama** | `director` | Short drama with AI-directed storyboard and cinematography |
-| **Narration** | `narration` | Narration-driven video with voiceover as the primary driver |
-| **Short-film** | `short-film` | Cinematic short film balancing story and visual expression |
+| **剧集** | `director` | AI 导演分镜与镜头语言的短剧 |
+| **解说** | `narration` | 以旁白为核心的解说类视频 |
+| **短片** | `short-film` | 故事与视觉兼顾的电影感短片 |
 
-## Main Workflow: execute_workflow
+## 主工作流：execute_workflow
 
-Use `execute_workflow` to run the full workflow in one go: create project + submit task + poll + auto-pay (if needed) + wait for completion. Call it once and wait for it to return.
+使用 `execute_workflow` 一次性运行完整工作流：创建项目 + 提交任务 + 轮询 + 自动支付（如需要）+ 等待完成。只需调用一次并等待返回。
 
-1. Create project and submit task (combined)
-2. Poll progress every 3 seconds
-3. Detect pending payment and pay automatically if needed
-4. Wait for completion (max 1 hour)
-5. Return the video download link or error message
+1. 创建项目并提交任务（合并）
+2. 每 3 秒轮询进度
+3. 检测待支付并自动支付（如需要）
+4. 等待完成（最长 1 小时）
+5. 返回视频下载链接或错误信息
 
-### Function Signature
+### 函数签名
 
 ```python
 execute_workflow(
-    diy_story: str,                    # Story/script content (required)
-    aspect: str,                       # Aspect ratio: 16:9 or 9:16 (required)
-    project_name: str,                 # Project name (required)
-    video_duration: str = "auto",       # Duration, default "auto" (optional)
-    style_id: Optional[int] = None,    # Style ID (optional)
-    project_type: str = "director"     # Mode, default "director" (optional)
+    diy_story: str,                    # 故事/剧本内容（必填）
+    aspect: str,                       # 画幅比例：16:9 或 9:16（必填）
+    project_name: str,                 # 项目名称（必填）
+    video_duration: str = "auto",       # 时长，默认 "auto"（可选）
+    style_id: Optional[int] = None,    # 风格 ID（可选）
+    project_type: str = "director"     # 模式，默认 "director"（可选）
 )
 ```
 
-### Parameters
+### 参数说明
 
-| Parameter | Required | Description |
+| 参数 | 必填 | 说明 |
 |-----------|----------|-------------|
-| diy_story | Yes | Story or script content |
-| aspect | Yes | Aspect ratio: `16:9` or `9:16` |
-| project_name | Yes | Project name |
-| video_duration | No | One of `auto`, `30`, `60`, `120`, `180`, `240`, `300`; default `"auto"` |
-| style_id | No | Style ID; omit if not specified |
-| project_type | No | `director` / `narration` / `short-film`; default `"director"` |
+| diy_story | 是 | 故事或剧本内容 |
+| aspect | 是 | 画幅比例：`16:9` 或 `9:16` |
+| project_name | 是 | 项目名称 |
+| video_duration | 否 | 可选值：`auto`、`30`、`60`、`120`、`180`、`240`、`300`；默认 `"auto"` |
+| style_id | 否 | 风格 ID；未指定时可省略 |
+| project_type | 否 | `director` / `narration` / `short-film`；默认 `"director"` |
 
-### Usage Flow
+### 使用流程
 
-1. **Ask the user to choose a generation mode** (drama / narration / short-film). Default to drama if not specified.
-2. **If the user wants to pick a style**: Call `get_styles()` to fetch the list, show ID, name, category, description; wait for the user to choose before continuing.
-3. **Run the workflow**:
-   - Call `execute_workflow()` with story content, aspect ratio, and project name.
-   - Set `project_type` from the user’s mode; pass `video_duration` if specified (otherwise default `"auto"`); pass `style_id` if a style was chosen.
-   - **Call once and wait for return** — the function handles create, submit, poll, pay, and completion, then returns the download link or error.
+1. **请用户选择生成模式**（剧集 / 解说 / 短片）。若未指定则默认剧集模式。
+2. **若用户希望选择风格**：调用 `get_styles()` 获取风格列表，展示 ID、名称、分类、描述；等待用户选择后再继续。
+3. **运行工作流**：
+   - 用故事内容、画幅比例、项目名称调用 `execute_workflow()`。
+   - 根据用户选择的模式设置 `project_type`；若用户指定了时长则传入 `video_duration`（否则默认 `"auto"`）；若用户选择了风格则传入 `style_id`。
+   - **调用一次并等待返回** — 函数内部完成创建、提交、轮询、支付和完成，最后返回下载链接或错误。
 
-### Examples
+### 示例
 
-**View style list**:
+**查看风格列表**：
 
 ```python
 api = TrusteeModeAPI()
 styles_result = api.get_styles()
-# Show style list to user
+# 向用户展示风格列表
 ```
 
-**Basic workflow (no duration or style)**:
+**基础工作流（无时长、无风格）**：
 
 ```python
 api = TrusteeModeAPI()
 result = api.execute_workflow(
-    diy_story="An adventure story...",
+    diy_story="一个冒险故事...",
     aspect="16:9",
-    project_name="My Video Project"
+    project_name="我的视频项目"
 )
-# result contains download URL or error message
+# result 包含下载 URL 或错误信息
 ```
 
-**With duration, no style**:
+**指定时长，无风格**：
 
 ```python
 result = api.execute_workflow(
-    diy_story="An adventure story...",
+    diy_story="一个冒险故事...",
     aspect="16:9",
-    project_name="My Video Project",
+    project_name="我的视频项目",
     video_duration="60"
 )
 ```
 
-**With duration and style**:
+**指定时长和风格**：
 
 ```python
 result = api.execute_workflow(
-    diy_story="An adventure story...",
+    diy_story="一个冒险故事...",
     aspect="16:9",
-    project_name="My Video Project",
+    project_name="我的视频项目",
     video_duration="60",
     style_id=142
 )
 ```
 
-**Narration mode**:
+**解说模式**：
 
 ```python
 result = api.execute_workflow(
-    diy_story="Today let's talk about the development of AI...",
+    diy_story="今天我们来聊聊 AI 的发展...",
     aspect="16:9",
-    project_name="Narration Video",
+    project_name="解说视频",
     project_type="narration"
 )
 ```
 
-**Short-film mode**:
+**短片模式**：
 
 ```python
 result = api.execute_workflow(
-    diy_story="As the sun sets, an old fisherman rows home alone, the sea glowing red behind him...",
+    diy_story="夕阳西下，一位老渔夫独自划船归家，海面被染成一片通红...",
     aspect="16:9",
-    project_name="Short Film",
+    project_name="短片",
     project_type="short-film"
 )
 ```
 
-## Return Value
+## 返回值
 
-The function blocks until the task completes (success or failure) or times out (1 hour). Wait for it to return.
+函数会阻塞直到任务完成（成功或失败）或超时（1 小时）。请等待其返回。
 
-**Success** (contains download link):
+**成功**（包含下载链接）：
 
 ```json
 {
@@ -162,19 +162,19 @@ The function blocks until the task completes (success or failure) or times out (
 }
 ```
 
-Return the **full signed URL** to the user (`data.video_asset.download_url`), e.g.:
+请将**完整的签名 URL** 返回给用户（`data.video_asset.download_url`），例如：
 
 ```
 https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4?Policy=...&Key-Pair-Id=...&Signature=...&response-content-disposition=attachment
 ```
 
-Do not return the unsigned URL without query params, e.g.:
+不要返回未带查询参数的未签名 URL，例如：
 
 ```
 https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4
 ```
 
-**Failure**:
+**失败**：
 
 ```json
 {

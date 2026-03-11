@@ -1,140 +1,140 @@
 ---
 name: giggle-generation-music
-description: Use this skill whenever the user wants to create, generate, or compose music — from a text description, custom lyrics, or as instrumental background music. Generates AI music via Giggle.pro. Trigger on: generate music, compose song, write a song, create music, make a track, AI music, background music, compose for me, music with lyrics, instrumental, make beats. Supports three modes: simplified (text prompt → AI composes), custom (user provides lyrics + style + title), and instrumental (no vocals).
+description: 当用户希望创建、生成或创作音乐时使用此技能——无论是文字描述、自定义歌词，还是纯乐器背景音乐。通过 Giggle.pro 生成 AI 音乐。触发词：生成音乐、写歌、创作歌曲、制作音乐、做一首歌、AI 音乐、背景音乐、为我作曲、带歌词的音乐、纯音乐、做 beats。支持三种模式：简化模式（文本提示 → AI 作曲）、自定义模式（用户提供歌词 + 风格 + 标题）、纯音乐模式（无人声）。
 ---
 
-# Giggle Music
+# Giggle 音乐
 
-Generate AI music via giggle.pro platform. Supports simplified mode and custom mode.
+通过 giggle.pro 平台生成 AI 音乐。支持简化模式和自定义模式。
 
-## Environment Setup
+## 环境配置
 
-Configure `GIGGLE_API_KEY` in project root `.env` file. See [SETUP.md](SETUP.md).
+在项目根目录 `.env` 文件中配置 `GIGGLE_API_KEY`。详见 [SETUP.md](SETUP.md)。
 
 ---
 
-## Interactive Guide
+## 交互指引
 
-### Mode Selection (priority high to low)
+### 模式选择（优先级从高到低）
 
-| User input | Mode | Notes |
+| 用户输入 | 模式 | 说明 |
 |------------|------|-------|
-| User provided full **lyrics text** | Custom mode (B) | Must be lyrics, not description |
-| User requests instrumental/background music | Instrumental mode (C) | No vocals |
-| All other cases (description, style, vocals, etc.) | **Simplified mode (A)** | Use user description as prompt verbatim, AI composes |
+| 用户提供完整**歌词文本** | 自定义模式 (B) | 必须是歌词，而非描述 |
+| 用户要求纯音乐/背景音乐 | 纯音乐模式 (C) | 无人声 |
+| 其他情况（描述、风格、人声等） | **简化模式 (A)** | 将用户描述原样作为 prompt，AI 作曲 |
 
-> **Key rule**: If user did not provide lyrics, always use **simplified mode A**. Use user description verbatim as `--prompt`; **do not supplement or rewrite**. E.g. user says "female vocal, 1 min, ancient style love", use `--prompt "female vocal, 1 min, ancient style love"` directly.
+> **关键规则**：若用户未提供歌词，始终使用**简化模式 A**。将用户描述原样作为 `--prompt`；**不要补充或改写**。例如用户说「女声、1 分钟、古风爱情」，则直接使用 `--prompt "女声，1 分钟，古风爱情"`。
 
-### Guide When Info Is Insufficient
+### 信息不足时的引导
 
-Only when user input is very vague (e.g. just "generate music" with no description), ask:
+仅当用户输入非常模糊时（例如只说「生成音乐」无任何描述），可询问：
 
 ```
-Question: "What type of music would you like to generate?"
-Options: AI composes (describe style) / Use my lyrics / Instrumental
+问题：「您想生成什么类型的音乐？」
+选项：AI 作曲（描述风格）/ 使用我的歌词 / 纯音乐
 ```
 
 ---
 
-## Execution Flow (Phase 1 Submit + Phase 2 Cron)
+## 执行流程（阶段 1 提交 + 阶段 2 Cron）
 
-Music generation typically takes 1-3 minutes. Uses "quick submit + Cron poll" two-phase architecture.
+音乐生成通常需要 1–3 分钟。采用「快速提交 + Cron 轮询」两阶段架构。
 
-> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API key is configured via system environment; scripts auto-read it. Execute the commands below directly.
+> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 通过系统环境配置；脚本会自动读取。直接执行以下命令即可。
 
 ---
 
-### Phase 1: Submit Task (exec completes in < 10 sec)
+### 阶段 1：提交任务（exec 在 10 秒内完成）
 
-**First send message to user**: "Music generation in progress, usually 1-3 minutes, results will be sent automatically."
+**先向用户发送消息**：「音乐生成进行中，通常需要 1–3 分钟，结果将自动发送。」
 
-#### A: Simplified Mode
+#### A：简化模式
 ```bash
-python3 scripts/giggle_music_api.py --prompt "user description" --no-wait
+python3 scripts/giggle_music_api.py --prompt "用户描述" --no-wait
 ```
 
-#### B: Custom Mode
+#### B：自定义模式
 ```bash
 python3 scripts/giggle_music_api.py --custom \
-  --prompt "lyrics content" \
+  --prompt "歌词内容" \
   --style "pop, ballad" \
-  --title "Song Title" \
+  --title "歌曲标题" \
   --vocal-gender female \
   --no-wait
 ```
 
-#### C: Instrumental
+#### C：纯音乐
 ```bash
-python3 scripts/giggle_music_api.py --prompt "user description" --instrumental --no-wait
+python3 scripts/giggle_music_api.py --prompt "用户描述" --instrumental --no-wait
 ```
 
-Response example:
+响应示例：
 ```json
 {"status": "started", "task_id": "xxx", "log_file": "/path/to/log"}
 ```
 
-**Immediately store task_id in memory** (`addMemory`):
+**立即将 task_id 存入记忆**（`addMemory`）：
 ```
 giggle-music task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```
 
 ---
 
-### Phase 2: Register Cron (2 min interval, wakeMode: "now")
+### 阶段 2：注册 Cron（2 分钟间隔，wakeMode: "now"）
 
-Use `cron` tool to register poll task. **Must follow parameter format strictly; do not modify field names or add extra fields**:
+使用 `cron` 工具注册轮询任务。**必须严格遵循参数格式；不得修改字段名或添加额外字段**：
 
 ```json
 {
   "action": "add",
   "job": {
-    "name": "giggle-music-<first 8 chars of task_id>",
+    "name": "giggle-music-<task_id 前 8 位>",
     "schedule": {
       "kind": "every",
       "everyMs": 120000
     },
     "payload": {
       "kind": "systemEvent",
-      "text": "Music task poll: Execute exec python3 scripts/giggle_music_api.py --query --task-id <full task_id>, process stdout per Cron logic. If stdout is non-JSON plain text, send to user and remove Cron. If stdout is JSON, do not send message, keep waiting. If stdout is empty, remove Cron immediately."
+      "text": "音乐任务轮询：执行 exec python3 scripts/giggle_music_api.py --query --task-id <完整 task_id>，按 Cron 逻辑处理 stdout。若 stdout 为非 JSON 纯文本，原样发送给用户并移除 Cron。若 stdout 为 JSON，不发送消息，继续等待。若 stdout 为空，立即移除 Cron。"
     },
     "sessionTarget": "main"
   }
 }
 ```
 
-Run on each Cron trigger:
+每次 Cron 触发时执行：
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```
 
-**Cron trigger handling** (judge by exec stdout; all paths exit 0):
+**Cron 触发处理**（根据 exec stdout 判断；以下路径均 exit 0）：
 
-| stdout pattern | Action |
+| stdout 模式 | 动作 |
 |----------------|--------|
-| Non-empty plain text (not starting with `{`) | **Forward stdout to user as-is** (do not add prefix or modify), **remove Cron** |
-| Empty stdout | Already pushed, **remove Cron immediately, no message** |
-| JSON (starts with `{`, has `"status"` field) | No message, do not remove Cron, wait for next poll |
+| 非空纯文本（不以 `{` 开头） | **将 stdout 原样转发给用户**（不加前缀、不修改），**移除 Cron** |
+| stdout 为空 | 已推送，**立即移除 Cron，不发送消息** |
+| JSON（以 `{` 开头，含 `"status"` 字段） | 不发送消息，不移除 Cron，等待下次轮询 |
 
 ---
 
-## Recovery After Gateway Restart
+## 网关重启后的恢复
 
-When user asks about previous music progress:
+当用户询问之前的音乐进度时：
 
-1. **task_id in memory** → Run `--query --task-id xxx` directly, **never re-submit**
-2. **No task_id in memory** → Inform user, ask if they want to regenerate
+1. **记忆中有 task_id** → 直接执行 `--query --task-id xxx`，**切勿重新提交**
+2. **记忆中无 task_id** → 告知用户，询问是否要重新生成
 
 ---
 
-## Parameter Quick Reference
+## 参数速查
 
-| Parameter | Description |
+| 参数 | 说明 |
 |-----------|-------------|
-| `--prompt` | Music description or lyrics (required for simplified mode) |
-| `--custom` | Enable custom mode |
-| `--style` | Music style (required for custom mode) |
-| `--title` | Song title (required for custom mode) |
-| `--instrumental` | Generate instrumental |
-| `--vocal-gender` | Vocal gender: male / female (custom mode only) |
-| `--query` | Query task status (Cron poll and manual check) |
-| `--task-id` | Task ID (used with --query) |
+| `--prompt` | 音乐描述或歌词（简化模式必填） |
+| `--custom` | 启用自定义模式 |
+| `--style` | 音乐风格（自定义模式必填） |
+| `--title` | 歌曲标题（自定义模式必填） |
+| `--instrumental` | 生成纯音乐 |
+| `--vocal-gender` | 人声性别：male / female（仅自定义模式） |
+| `--query` | 查询任务状态（Cron 轮询及手动查询） |
+| `--task-id` | 任务 ID（与 --query 配合使用） |
