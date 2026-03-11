@@ -1,8 +1,6 @@
 ---
 name: giggle-generation-image
 description: Use this skill whenever the user wants to create, generate, or draw images — including text-to-image, image-to-image style transfer, or blending multiple reference images. Generates AI images via Seedream (giggle.pro). Trigger on: generate image, draw, create picture, AI art, make a photo, illustrate, create visual, need an image, style transfer, reference image, Seedream. Supports 1–10 reference images, custom aspect ratio (16:9, 9:16, 1:1, etc.), and batch generation (up to 4 per request).
-user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🖼️","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"Giggle"}
 ---
 
 # Generating Images With Seedream

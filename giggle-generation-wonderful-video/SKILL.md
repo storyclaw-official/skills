@@ -1,13 +1,12 @@
 ---
 name: giggle-generation-wonderful-video
-description: Use this skill whenever the user wants to create a "wonderful-video" — a character-driven AI video where you can specify how each character looks via image URLs. Generates videos via Giggle.pro trustee API. Trigger on: wonderful video, character video, make a video with my character, add character image to video, custom character appearance, video with face, portrait video, specify character look, wonderful-video. Supports character_info image URLs, subtitles, style selection, aspect ratio (16:9/9:16), and configurable duration.
-user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"✨","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
+description: Use this skill ONLY when the user explicitly mentions "精彩视频", "wonderful video", or "wonderful-video" by name. This skill generates character-driven AI videos via Giggle.pro trustee API, supporting character_info image URLs, subtitles, style selection, aspect ratio (16:9/9:16), and configurable duration.
 ---
 
 # Wonderful Video Generation Skill
 
 Calls Giggle trustee mode API with **wonderful-video** project type to execute the full video generation workflow. A single function call completes the entire process.
+Do NOT trigger for generic video generation requests such as "生成视频", "短视频", "制作视频", "generate video", "create video", "short video", "character video", or any other video-related request that does not include the exact term "精彩视频" or "wonderful video" or "wonderful-video". 
 
 ## First-Time Setup (Required)
 

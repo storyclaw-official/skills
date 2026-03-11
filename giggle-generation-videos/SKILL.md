@@ -1,8 +1,6 @@
 ---
 name: giggle-generation-videos
 description: Use this skill whenever the user wants to generate a video, create a short film, or explore available video styles. Generates AI videos via Giggle.pro trustee mode V2. Trigger on: generate video, create video, make a short film, AI video, video from story, shoot a video, I have a story idea, short drama, narration video, cinematic video, what video styles are available. Supports three modes — drama (director), narration, and short-film — with configurable aspect ratio (16:9/9:16), duration, and style selection.
-user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎥","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"Giggle"}
 ---
 
 # Video Generation (Trustee Mode V2)

@@ -1,8 +1,6 @@
 ---
 name: giggle-generation-image
 description: Generate AI images via Generation API with multiple models (Seedream, Midjourney, Nano Banana). Supports text-to-image and image-to-image. Use when user needs to create or generate images. Use cases: (1) generate from text description, (2) generate with reference images, (3) custom model, aspect ratio, resolution. Trigger keywords: generate image, draw, create image, AI art, midjourney, seedream, nano-banana.
-user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🖼️","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"Giggle Team"}
 ---
 
 # Giggle Generation Image (Multi-Model Image Generation)

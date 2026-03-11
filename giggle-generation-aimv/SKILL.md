@@ -1,8 +1,6 @@
 ---
 name: giggle-generation-aimv
 description: Use this skill whenever the user wants to create an AI music video (MV) — including generating music from a text prompt, using custom lyrics, or uploading existing audio. Calls Giggle.pro MV trustee API to run the full end-to-end workflow. Trigger on: generate MV, music video, make a video for this song, lyrics video, create MV, AI music video, music + video, video from lyrics, upload music to video. Requires a reference image (style base) and supports subtitles, aspect ratio (16:9 / 9:16), and three music modes (prompt / custom lyrics / upload).
-user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎬","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"Giggle"}
 ---
 
 # MV Trustee Mode API Skill
