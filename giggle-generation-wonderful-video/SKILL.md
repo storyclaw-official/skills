@@ -1,6 +1,6 @@
 ---
 name: giggle-generation-wonderful-video
-description: 仅当用户明确提及「精彩视频」「wonderful video」或「wonderful-video」时使用此技能。支持通过 Giggle.pro trustee API 生成角色驱动的 AI 视频，含 character_info 图片 URL、字幕、风格选择、画幅比例（16:9/9:16）及可配置时长
+description: 仅当用户明确提及「精彩视频」「wonderful video」或「wonderful-video」时使用此技能。此技能可生成角色驱动的 AI 视频。
 ---
 
 # 精彩视频生成技能
