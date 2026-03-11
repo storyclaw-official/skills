@@ -1,131 +1,133 @@
 ---
-name: giggle-generate-wonderful-video
-description: Generates wonderful-video type videos via Giggle API. Supports character images (character_info), subtitles, and style selection. Use when creating wonderful-video content, specifying character appearance by image URL, or viewing available styles.
+name: giggle-generation-wonderful-video
+description: Use this skill whenever the user wants to create a "wonderful-video" — a character-driven AI video where you can specify how each character looks via image URLs. Generates videos via Giggle.pro trustee API. Trigger on: wonderful video, character video, make a video with my character, add character image to video, custom character appearance, video with face, portrait video, specify character look, wonderful-video. Supports character_info image URLs, subtitles, style selection, aspect ratio (16:9/9:16), and configurable duration.
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"✨","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"姜式伙伴"}
 ---
 
-# Wonderful Video 生成 Skill
+# Wonderful Video Generation Skill
 
-调用 Giggle 托管模式 API，以 **wonderful-video** 项目类型执行完整的视频生成工作流。AI 只需调用一个函数即可完成全流程。
+Calls Giggle trustee mode API with **wonderful-video** project type to execute the full video generation workflow. A single function call completes the entire process.
 
-## 首次使用配置（必读）
+## First-Time Setup (Required)
 
-**执行任何操作前，必须先检查用户是否已配置 API 密钥。**
+**Before any operation, verify that the user has configured the API key.**
 
-**API Key 获取方式**：登录 [Giggle.pro](https://giggle.pro/) 平台，在个人中心或账户设置中获取 API 密钥。
+**API Key**: Log in to [Giggle.pro](https://giggle.pro/) and obtain the API key from your account settings.
 
-配置方式（二选一）：
-1. **项目根目录 `.env`**：复制 `env.example` 为 `.env`，填写 `GIGGLE_API_KEY=your_api_key`
-2. **环境变量**：`export GIGGLE_API_KEY=your_api_key`
+Configuration (choose one):
+1. **Project root `.env`**: Copy `env.example` to `.env` and set `GIGGLE_API_KEY=your_api_key`
+2. **Environment variable**: `export GIGGLE_API_KEY=your_api_key`
 
-**检查步骤**：
-1. 确认用户已在 `.env` 或环境变量中配置 `GIGGLE_API_KEY`
-2. 如果未配置，**必须提示用户**：
-   > 您好！在使用视频生成功能前，需要先配置 API 密钥。请先到 [Giggle.pro](https://giggle.pro/) 平台获取 API Key，然后在项目根目录创建 `.env` 文件（可参考 `env.example`），添加 `GIGGLE_API_KEY=your_api_key`，或通过环境变量设置。
-3. 等待用户确认已配置后，再执行后续工作流
+**Check steps**:
+1. Confirm the user has configured `GIGGLE_API_KEY` in `.env` or environment variables
+2. If not configured, **prompt the user**:
+   > Hi! Before using the video generation feature, you need to configure your API key. Please go to [Giggle.pro](https://giggle.pro/) to obtain an API Key, then create a `.env` file in the project root (see `env.example`), add `GIGGLE_API_KEY=your_api_key`, or set it via environment variable.
+3. Wait for user confirmation before proceeding with the workflow
 
-## 项目类型说明
+## Project Type
 
-本 Skill 固定使用 **wonderful-video** 项目类型，无需用户选择模式。
+This skill uses the **wonderful-video** project type by default. No mode selection is required.
 
-## 工作流函数
+## Workflow Function
 
-使用 `execute_workflow` 函数执行完整工作流。该函数**一步完成**创建项目与提交任务，并自动处理后续步骤：
-1. 创建项目 + 提交任务（合并为一步）
-2. 循环查询进度（每3秒）
-3. 自动检测待支付状态并执行支付（如需要）
-4. 等待任务完成（最多1小时）
-5. 返回视频下载链接或错误信息
+Use the `execute_workflow` function to run the full workflow. It **creates the project and submits the task in one step** and handles the rest automatically:
+1. Create project + submit task (combined)
+2. Poll progress every 3 seconds
+3. Detect pending payment and pay automatically (if needed)
+4. Wait for task completion (max 1 hour)
+5. Return the video download link or error message
 
-**重要**：只需调用此函数一次，等待返回结果即可。
+**Important**: Call this function once and wait for the result.
 
-### 函数签名
+### Function Signature
 
 ```python
 execute_workflow(
-    diy_story: str,                           # 故事创意内容（必需）
-    aspect: str,                              # 视频宽高比 16:9/9:16（必需）
-    project_name: str,                        # 项目名称（必需）
-    video_duration: str = "auto",             # 视频时长，默认 "auto"（可选）
-    style_id: Optional[int] = None,           # 风格ID（可选）
-    character_info: Optional[List[Dict]] = None,  # 角色图片（可选）
-    subtitle_enabled: Optional[bool] = None   # 是否启用字幕（可选）
+    diy_story: str,                           # Story/script content (required)
+    aspect: str,                              # Video aspect ratio 16:9/9:16 (required)
+    project_name: str,                        # Project name (required)
+    video_duration: str = "auto",             # Video duration, default "auto" (optional)
+    style_id: Optional[int] = None,           # Style ID (optional)
+    character_info: Optional[List[Dict]] = None,  # Character images (optional)
+    subtitle_enabled: Optional[bool] = None   # Enable subtitles (optional)
 )
 ```
 
-### 参数说明
+### Parameters
 
-1. **diy_story**（必需）：故事创意内容
-2. **aspect**（必需）：视频宽高比，`16:9` 或 `9:16`
-3. **project_name**（必需）：项目名称
-4. **video_duration**（必需）：`30`、`60`、`120`、`180`、`240`、`300`中选择一个
-5. **style_id**（可选）：风格ID，不指定则不传
-6. **character_info**（可选）：角色图片列表，用于指定角色外貌。格式：`[{"name": "角色名", "url": "图片URL"}, ...]`
-7. **subtitle_enabled**（可选）：是否启用字幕，`True`/`False`
+1. **diy_story** (required): Story/script content
+2. **aspect** (required): Video aspect ratio, `16:9` or `9:16`
+3. **project_name** (required): Project name
+4. **video_duration** (optional): One of `30`, `60`, `120`, `180`, `240`, `300`; default `auto`
+5. **style_id** (optional): Style ID; omit if not specified
+6. **character_info** (optional): List of character images to define appearance. Format: `[{"name": "Character name", "url": "Image URL"}, ...]`
+7. **subtitle_enabled** (optional): Enable subtitles, `True`/`False`
 
-### 使用流程
+### Usage Flow
 
-1. **如用户想查看可用风格**：
-   - 调用 `get_styles()` 获取风格列表
-   - 向用户展示风格（ID、名称、分类、描述）
+1. **If user wants to view available styles**:
+   - Call `get_styles()` to fetch the style list
+   - Show styles to user (ID, name, category, description)
 
-2. **执行工作流**：
-   - 调用 `execute_workflow()` 一次
-   - 传入故事创意、比例、项目名称
-   - 可选传入：时长、风格ID、角色图片（`character_info`）、是否启用字幕（`subtitle_enabled`）
-   - 若用户提供角色图片 URL，构建 `character_info` 数组传入
-   - 等待函数返回结果
+2. **Execute workflow**:
+   - Call `execute_workflow()` once
+   - Pass story, aspect ratio, project name
+   - Optionally pass: duration, style_id, character_info, subtitle_enabled
+   - If user provides character image URLs, build a `character_info` array and pass it
+   - Wait for the function result
 
-### 示例
+### Examples
 
-**查看风格**：
+**View styles**:
 ```python
 api = WonderfulVideoAPI()
 styles_result = api.get_styles()
-# 展示风格列表给用户
+# Show style list to user
 ```
 
-**执行工作流**：
+**Execute workflow**:
 ```python
 api = WonderfulVideoAPI()
 result = api.execute_workflow(
-    diy_story="一个关于冒险的故事...",
+    diy_story="An adventure story...",
     aspect="16:9",
-    project_name="我的wonderful视频"
+    project_name="My wonderful video"
 )
-# result 包含下载链接或错误信息
+# result contains download URL or error info
 ```
 
-**指定时长和风格**：
+**With duration and style**:
 ```python
 api = WonderfulVideoAPI()
 result = api.execute_workflow(
-    diy_story="今天我们来聊一聊...",
+    diy_story="Today we're talking about...",
     aspect="9:16",
-    project_name="竖屏视频",
+    project_name="Portrait video",
     video_duration="60",
     style_id=142
 )
 ```
 
-**指定角色图片**（用户提供角色图片 URL 时）：
+**With character images** (when user provides character image URLs):
 ```python
 api = WonderfulVideoAPI()
 result = api.execute_workflow(
-    diy_story="潘金莲与西门庆",
+    diy_story="Story about two characters",
     aspect="16:9",
-    project_name="角色视频",
+    project_name="Character video",
     video_duration="30",
     character_info=[
-        {"name": "潘金莲", "url": "https://xxx/pan.jpg"},
-        {"name": "西门庆", "url": "https://xxx/xi.jpg"}
+        {"name": "Character A", "url": "https://xxx/char_a.jpg"},
+        {"name": "Character B", "url": "https://xxx/char_b.jpg"}
     ],
     subtitle_enabled=True
 )
 ```
 
-### 返回值
+### Return Value
 
-成功：
+Success:
 ```json
 {
     "code": 200,
@@ -140,11 +142,11 @@ result = api.execute_workflow(
 }
 ```
 
-失败：
+Failure:
 ```json
 {
     "code": -1,
-    "msg": "错误信息",
+    "msg": "Error message",
     "data": null
 }
 ```

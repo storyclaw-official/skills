@@ -53,7 +53,7 @@ SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 # ── 防重复推送（.sent 文件标记）────────────────────────────────────────────────
 def _get_image_log_dir() -> Path:
-    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-image' / 'logs'
+    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-generation-image' / 'logs'
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 

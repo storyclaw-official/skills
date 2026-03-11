@@ -1,8 +1,8 @@
 ---
-name: giggle-music
-description: Generate AI music via giggle.pro. Use when user needs to create, generate or compose music. Supports generating from text description, composing songs with lyrics, instrumental/background music, custom style and vocal gender. Trigger keywords: generate music, compose song, write song, AI compose, music creation.
+name: giggle-generation-music
+description: Use this skill whenever the user wants to create, generate, or compose music — from a text description, custom lyrics, or as instrumental background music. Generates AI music via Giggle.pro. Trigger on: generate music, compose song, write a song, create music, make a track, AI music, background music, compose for me, music with lyrics, instrumental, make beats. Supports three modes: simplified (text prompt → AI composes), custom (user provides lyrics + style + title), and instrumental (no vocals).
 user-invocable: true
-metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎶","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/requirements.txt"]},"version":"3.0.0","author":"姜式伙伴"}
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎶","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/requirements.txt"]},"version":"3.0.0","author":"Giggle"}
 ---
 
 # Giggle Music

@@ -11,7 +11,7 @@
 | `giggle-drama` | AI 短视频生成（多种画风） | 是 |
 | `giggle-aimv` | AI 音乐视频 / MV 生成 | 是 |
 | `giggle-music` | AI 音乐生成 | 是 |
-| `giggle-image` | AI 图像生成（Seedream 模型） | 是 |
+| `giggle-generation-image` | AI 图像生成（Seedream 模型） | 是 |
 | `giggle-screenplay` | AI 剧本创作（姜文风格等多种风格） | 否 |
 
 所有 giggle-* 技能共用同一个 `GIGGLE_API_KEY`，只需配置一次。
@@ -30,7 +30,7 @@ cd /path/to/storyclaw-skills
 cp -r giggle-drama ~/.openclaw/skills/
 cp -r giggle-aimv ~/.openclaw/skills/
 cp -r giggle-music ~/.openclaw/skills/
-cp -r giggle-image ~/.openclaw/skills/
+cp -r giggle-generation-image ~/.openclaw/skills/
 cp -r giggle-screenplay ~/.openclaw/skills/   # 无需 API Key
 ```
 
@@ -131,7 +131,7 @@ OpenClaw 的标准配置方式是在 `~/.openclaw/openclaw.json` 中统一填写
 | 自定义模式 | 提供自己写的歌词 | 歌词 + 音乐风格 + 歌名 |
 | 上传模式 | 已有音乐文件 | 平台上传的音乐资产 ID |
 
-**参考图**：生成 MV 必须提供一张参考图，作为画面风格的基调。可自行提供，或让 Agent 使用 giggle-image 生成。
+**参考图**：生成 MV 必须提供一张参考图，作为画面风格的基调。可自行提供，或让 Agent 使用 giggle-generation-image 生成。
 
 **支持的视频比例**：16:9（横屏）、9:16（竖屏）
 
@@ -167,7 +167,7 @@ OpenClaw 的标准配置方式是在 `~/.openclaw/openclaw.json` 中统一填写
 
 ---
 
-### giggle-image（AI 图像）
+### giggle-generation-image（AI 图像）
 
 使用 Seedream 模型生成 AI 图像，支持文生图、图生图和多图融合。
 
@@ -267,7 +267,7 @@ Agent 使用 Cron 机制自动轮询进度：
 - **giggle-drama**：每 3 分钟自动汇报一次，共需 10-30 分钟
 - **giggle-aimv**：每 3 分钟自动汇报一次，共需 3-10 分钟
 - **giggle-music**：每 2 分钟自动检查一次，共需 1-3 分钟
-- **giggle-image**：每 45 秒自动检查一次，共需 30-60 秒
+- **giggle-generation-image**：每 45 秒自动检查一次，共需 30-60 秒
 
 如果等待超时仍未收到结果，可以询问 Agent："上次的视频/图片/音乐进展如何？"，Agent 会查询最近的任务状态。
 

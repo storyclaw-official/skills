@@ -1,186 +1,188 @@
 ---
-name: giggle-aimv
-description: 用户在有生成 MV、生成音乐视频、根据歌词/提示词/上传音乐生成视频等需求时使用。支持三种音乐生成模式（提示词、自定义、上传），调用 MV 托管 API 完成完整工作流。
+name: giggle-generation-aimv
+description: Use this skill whenever the user wants to create an AI music video (MV) — including generating music from a text prompt, using custom lyrics, or uploading existing audio. Calls Giggle.pro MV trustee API to run the full end-to-end workflow. Trigger on: generate MV, music video, make a video for this song, lyrics video, create MV, AI music video, music + video, video from lyrics, upload music to video. Requires a reference image (style base) and supports subtitles, aspect ratio (16:9 / 9:16), and three music modes (prompt / custom lyrics / upload).
+user-invocable: true
+metadata: {"openclaw":{"requires":{"env":["GIGGLE_API_KEY"],"bins":["python3"]},"primaryEnv":"GIGGLE_API_KEY","emoji":"🎬","os":["darwin","linux","win32"],"install":["pip3 install -r {baseDir}/scripts/requirements.txt"]},"version":"1.0.0","author":"Giggle"}
 ---
 
-# MV 托管模式 API Skill
+# MV Trustee Mode API Skill
 
-此 skill 用于调用 MV 托管模式 API，执行完整的 MV 生成工作流。**创建项目与提交任务已在脚本内合并为一步**，AI 只需调用 `execute_workflow` 一次，切勿分开调用创建和提交。
+Calls the MV trustee mode API to run the full MV generation workflow. **Project creation and task submission are merged into a single step inside the script** — call `execute_workflow` once; never split create and submit.
 
-## 首次使用配置（必读）
+## First-Time Setup (Required)
 
-**执行任何操作前，必须先检查用户是否已配置 API 密钥。**
+**Before any operation, verify that the user has configured the API key.**
 
-**API Key 获取方式**：登录 [Giggle.pro](https://giggle.pro/) 平台，在个人中心或账户设置中获取 API 密钥。
+**API Key**: Log in to [Giggle.pro](https://giggle.pro/) and obtain the API key from your account settings.
 
-配置方式（二选一）：
-1. **项目根目录 `.env`**：复制 `env.example` 为 `.env`，填写 `GIGGLE_API_KEY=your_api_key`
-2. **环境变量**：`export GIGGLE_API_KEY=your_api_key`
+Configuration (choose one):
+1. **Project root `.env`**: Copy `env.example` to `.env` and set `GIGGLE_API_KEY=your_api_key`
+2. **Environment variable**: `export GIGGLE_API_KEY=your_api_key`
 
-**检查步骤**：
-1. 确认用户已在 `.env` 或环境变量中配置 `GIGGLE_API_KEY`
-2. 如果未配置，**必须提示用户**：
-   > 您好！在使用 MV 生成功能前，需要先配置 API 密钥。请先到 [Giggle.pro](https://giggle.pro/) 平台获取 API Key，然后在项目根目录创建 `.env` 文件（可参考 `env.example`），添加 `GIGGLE_API_KEY=your_api_key`，或通过环境变量设置。
-3. 等待用户确认已配置后，再执行后续工作流
+**Check steps**:
+1. Confirm the user has configured `GIGGLE_API_KEY` in `.env` or environment variables
+2. If not configured, **prompt the user**:
+   > Hi! Before using the MV generation feature, you need to configure your API key. Please go to [Giggle.pro](https://giggle.pro/) to obtain an API Key, then create a `.env` file in the project root (see `env.example`), add `GIGGLE_API_KEY=your_api_key`, or set it via environment variable.
+3. Wait for user confirmation before proceeding with the workflow
 
-## 三种音乐生成模式
+## Three Music Generation Modes
 
-| 模式 | music_generate_type | 必需参数 | 说明 |
-|------|---------------------|----------|------|
-| **提示词模式** | `prompt` | prompt, vocal_gender | 用文字描述生成音乐 |
-| **自定义模式** | `custom` | lyrics, style, title | 提供歌词、风格、歌名 |
-| **上传模式** | `upload` | music_asset_id | 上传已有音乐资产 |
+| Mode | music_generate_type | Required params | Description |
+|------|---------------------|-----------------|-------------|
+| **Prompt mode** | `prompt` | prompt, vocal_gender | Describe the music in text |
+| **Custom mode** | `custom` | lyrics, style, title | Provide lyrics, style, and title |
+| **Upload mode** | `upload` | music_asset_id | Use an existing uploaded music asset |
 
-### 共用参数（所有模式必须）
+### Shared Parameters (Required for All Modes)
 
-- **reference_image** 或 **reference_image_url**：参考图，至少提供一个（asset_id 或下载链接），此字段同时支持base64编码的图片，示例："iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-- **aspect**：宽高比，`16:9` 或 `9:16`
-- **scene_description**：场景描述，**默认空**，仅当用户明确提到场景描述时设置（最长 200 字）
-- **subtitle_enabled**：是否启用字幕，**默认 false**
+- **reference_image** or **reference_image_url**: Reference image — provide at least one (asset_id or download URL). This field also accepts base64-encoded images, e.g. `"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="`
+- **aspect**: Aspect ratio, `16:9` or `9:16`
+- **scene_description**: Visual scene description, **empty by default** — set only when the user explicitly mentions a scene (max 200 chars)
+- **subtitle_enabled**: Enable subtitles, **default false**
 
-### 模式专属参数
+### Mode-Specific Parameters
 
-**提示词模式 (prompt)**：
-- `prompt`：音乐描述提示词（必需）
-- `vocal_gender`：人声性别，`male` / `female` / `auto`（可选，默认 `auto`）
-- `instrumental`：是否纯音乐（可选，默认 false）
+**Prompt mode**:
+- `prompt`: Music description (required)
+- `vocal_gender`: Vocal gender — `male` / `female` / `auto` (optional, default `auto`)
+- `instrumental`: Instrumental only (optional, default false)
 
-**自定义模式 (custom)**：
-- `lyrics`：歌词内容（必需）
-- `style`：音乐风格（必需）
-- `title`：歌名（必需）
+**Custom mode**:
+- `lyrics`: Lyrics content (required)
+- `style`: Music style (required)
+- `title`: Song title (required)
 
-**上传模式 (upload)**：
-- `music_asset_id`：已有音乐资产 ID（必需）
+**Upload mode**:
+- `music_asset_id`: Existing music asset ID (required)
 
-## 工作流函数
+## Workflow Function
 
-使用 `execute_workflow` 执行完整工作流，**只需调用一次**。函数内部自动完成：创建项目+提交任务（合并一步）→ 轮询进度（每 3 秒）→ 检测待支付并支付 → 等待完成（最多 1 小时）。
+Use `execute_workflow` to run the full workflow — **call once and wait**. Internally handles: create project + submit task (combined) → poll progress (every 3 sec) → detect and pay if pending → wait for completion (max 1 hour).
 
-**重要**：
-- 禁止分开调用 `create_project` 和 `submit_mv_task`，必须使用 `execute_workflow` 或 `create_and_submit`
-- 调用后只需等待函数返回，中间步骤自动处理
+**Important**:
+- Never call `create_project` and `submit_mv_task` separately — always use `execute_workflow` or `create_and_submit`
+- After calling, just wait for the function to return; all intermediate steps are handled automatically
 
-### 函数签名
+### Function Signature
 
 ```python
 execute_workflow(
-    music_generate_type: str,      # 模式：prompt / custom / upload
-    aspect: str,                   # 宽高比 16:9 或 9:16
-    project_name: str,             # 项目名称
-    reference_image: str = "",      # 参考图 asset_id（与 reference_image_url 二选一）
-    reference_image_url: str = "", # 参考图下载链接（与 reference_image 二选一），此字段同时支持base64编码的图片，示例："iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-    scene_description: str = "",    # 场景描述，默认空
-    subtitle_enabled: bool = False,# 字幕开关，默认 False
-    # 提示词模式
+    music_generate_type: str,      # Mode: prompt / custom / upload
+    aspect: str,                   # Aspect ratio: 16:9 or 9:16
+    project_name: str,             # Project name
+    reference_image: str = "",     # Reference image asset_id (mutually exclusive with reference_image_url)
+    reference_image_url: str = "", # Reference image URL or base64 (mutually exclusive with reference_image)
+    scene_description: str = "",   # Scene description, empty by default
+    subtitle_enabled: bool = False,# Subtitles on/off, default False
+    # Prompt mode
     prompt: str = "",
     vocal_gender: str = "auto",
     instrumental: bool = False,
-    # 自定义模式
+    # Custom mode
     lyrics: str = "",
     style: str = "",
     title: str = "",
-    # 上传模式
+    # Upload mode
     music_asset_id: str = "",
 )
 ```
 
-### 参数提取规则
+### Parameter Extraction Rules
 
-1. **reference_image 与 reference_image_url**：至少一个，用户提供 asset_id 用 reference_image，提供图片链接用 reference_image_url
-2. **scene_description**：默认为空，**仅当用户明确提到「场景」「画面描述」「视觉风格」等时**才填充
-3. **subtitle_enabled**：默认为 False，**仅当用户明确要求字幕时**设为 True
-4. **aspect**：用户提到竖屏/9:16 时用 `9:16`，否则默认 `16:9`
-5. **模式判断**：用户说「用提示词/描述生成」→ prompt；「给歌词/歌词是」→ custom；「上传音乐/用我的音乐」→ upload
+1. **reference_image vs reference_image_url**: At least one is required. Use `reference_image` for asset_id, `reference_image_url` for image link or base64.
+2. **scene_description**: Empty by default — fill only when user explicitly mentions "scene", "visual description", or "visual style".
+3. **subtitle_enabled**: Default False — set True only when user explicitly requests subtitles.
+4. **aspect**: Use `9:16` when user mentions portrait/vertical/9:16; otherwise default to `16:9`.
+5. **Mode selection**: "describe the music / use a prompt" → prompt; "here are the lyrics / lyrics are" → custom; "upload music / use my audio" → upload.
 
-### 示例
+### Examples
 
-**提示词模式**：
+**Prompt mode**:
 ```python
 api = MVTrusteeAPI()
 result = api.execute_workflow(
     music_generate_type="prompt",
     aspect="16:9",
-    project_name="我的 MV",
+    project_name="My MV",
     reference_image_url="https://example.com/ref.jpg",
-    prompt="轻快的流行音乐，阳光沙滩风格",
+    prompt="Upbeat pop music, sunny beach vibes",
     vocal_gender="female"
 )
 ```
 
-**自定义模式（用户提供歌词）**：
+**Custom mode (user provides lyrics)**:
 ```python
 result = api.execute_workflow(
     music_generate_type="custom",
     aspect="9:16",
-    project_name="歌词 MV",
+    project_name="Lyrics MV",
     reference_image="asset_xxx",
-    lyrics="Verse 1: 春天的风...",
+    lyrics="Verse 1: Spring wind blows...",
     style="pop",
-    title="春日之歌"
+    title="Spring Song"
 )
 ```
 
-**上传模式**：
+**Upload mode**:
 ```python
 result = api.execute_workflow(
     music_generate_type="upload",
     aspect="16:9",
-    project_name="上传音乐 MV",
+    project_name="Uploaded Music MV",
     reference_image="asset_yyy",
     music_asset_id="music_asset_zzz"
 )
 ```
 
-**用户提到场景描述时**：
+**With scene description** (when user explicitly describes a scene):
 ```python
 result = api.execute_workflow(
     music_generate_type="prompt",
     aspect="16:9",
-    project_name="场景 MV",
+    project_name="Scene MV",
     reference_image_url="https://...",
-    prompt="电子舞曲",
-    scene_description="城市夜景，霓虹灯闪烁，车流穿梭"  # 用户明确描述场景时设置
+    prompt="Electronic dance music",
+    scene_description="City night scene, neon lights flashing, traffic flowing"
 )
 ```
 
-### 提交任务 API 请求示例（提示词模式）
+### Submit Task API Request Examples (Prompt Mode)
 
-提交任务接口 (`/api/v1/trustee_mode/mv/submit`) 的请求体示例：
+Submit endpoint (`/api/v1/trustee_mode/mv/submit`) request body:
 
 ```json
 {
   "project_id": "c0cb1f32-bb07-4449-add5-e42ccfca1ab6",
   "music_generate_type": "prompt",
-  "prompt": "一首欢快的流行乐",
+  "prompt": "A cheerful pop song",
   "vocal_gender": "female",
   "instrumental": false,
-  "reference_image_url": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxMTEhUT...（base64 图片数据）",
-  "scene_description": "夕阳下海边漫步的浪漫场景，海浪轻轻拍打沙滩，天空呈现粉红色渐变",
+  "reference_image_url": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxMTEhUT...(base64 image data)",
+  "scene_description": "A romantic beach walk at sunset, waves gently lapping the shore, pink sky gradient",
   "aspect": "16:9",
   "subtitle_enabled": false
 }
 ```
 
-说明：`reference_image`（asset_id）与 `reference_image_url`（链接或 base64）二选一。
+Note: `reference_image` (asset_id) and `reference_image_url` (link or base64) are mutually exclusive.
 
-**自定义模式**：
+**Custom mode**:
 
 ```json
 {
   "project_id": "0ea74500-9178-4693-b581-342d5e17994c",
   "music_generate_type": "custom",
-  "lyrics": "Verse 1:\n站在海边看夕阳\n回忆像潮水般涌来\n\nChorus:\n就让海风吹散烦恼\n在这金色时刻里\n我们找到彼此\n",
+  "lyrics": "Verse 1:\nStanding by the sea watching the sunset\nMemories rush in like waves\n\nChorus:\nLet the sea breeze blow away all worries\nIn this golden moment\nWe found each other\n",
   "style": "pop ballad",
-  "title": "海边回忆",
+  "title": "Seaside Memories",
   "reference_image": "is45gnvumgd",
-  "scene_description": "黄昏时分的情侣在海边散步，背影拉长，天空橙红渐变色",
+  "scene_description": "A couple walking on the beach at dusk, long shadows, orange-red sky gradient",
   "aspect": "9:16",
   "subtitle_enabled": false
 }
 ```
 
-**上传模式**：
+**Upload mode**:
 
 ```json
 {
@@ -188,15 +190,15 @@ result = api.execute_workflow(
   "music_generate_type": "upload",
   "music_asset_id": "music_asset_789",
   "reference_image": "is45gnvumgd",
-  "scene_description": "城市夜景，霓虹灯闪烁，车流如织，雨后的街道反射灯光",
+  "scene_description": "City night scene, neon lights, dense traffic, rain-soaked streets reflecting light",
   "aspect": "16:9",
   "subtitle_enabled": true
 }
 ```
 
-### 查询进度 API 响应示例
+### Query Progress API Response Example
 
-查询进度接口 (`/api/v1/trustee_mode/mv/query`) 的响应示例（全部完成）：
+Query endpoint (`/api/v1/trustee_mode/mv/query`) response (all steps completed):
 
 ```json
 {
@@ -273,27 +275,27 @@ result = api.execute_workflow(
 }
 ```
 
-说明：`pay_status` 为 `pending` 时需调用支付接口；所有 `steps` 完成后 `video_asset.download_url` 有值，需要返回完整的下载链接。正确返回：
+Note: When `pay_status` is `pending`, call the payment endpoint. Once all `steps` are completed, `video_asset.download_url` is populated — return the full signed URL. Correct return:
 ```json
 https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9hc3NldHMuZ2lnZ2xlLnByby9wcml2YXRlL2FpX2RpcmVjdG9yLzM0OGU0OTU2YzdiZDRmNzYzYi9xempjN2d3a3BmLm1wNCoiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3NzMyNzM1OTkwMDB9fX1dfQ__&Key-Pair-Id=K36RVPYROCSUEJ&Signature=StUnhxVXvyK-KRDF3NAWC51nCOKYE31seHnsNr5B%7E3KM4QhtF9rZOt1GzYx-WW7Yt3r4wxtjuk%7E6KxVtbgTzCAHxjweKzLwyEoIJpeZ6xX36jmPwtk8381e4BIwwa%7EjxbO3pKkOS8ZPIs-5JirJRqOAU7bOT8tf%7EHBMZF11WgbnbkI7jmBibefh0cvjhBrhQl681YxcFozXw5PbrlPQpwGe90tOrWbhBKXjcXQGJa8SSLf2NDwZucjnTK40piDcAxJoAHCRd-q5AYhdIVMxfVY0kWndXHKYPRBwzX0iyNDcfcDhJdAnlZlBPP9l8c0F9yATKhhAFLMaJdt8Qybse4g__&response-content-disposition=attachment
 ```
-错误返回：
+Wrong (unsigned URL only):
 ```json
 https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4
 ```
 
-### 支付 API 请求与响应示例
+### Payment API Request and Response
 
-支付接口 (`/api/v1/trustee_mode/mv/pay`)：
+Payment endpoint (`/api/v1/trustee_mode/mv/pay`):
 
-**请求体**：
+**Request body**:
 ```json
 {
   "project_id": "28b4f4f7-d219-4754-a78b-d9896cd16573"
 }
 ```
 
-**响应**：
+**Response**:
 ```json
 {
   "code": 200,
@@ -306,9 +308,9 @@ https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4
 }
 ```
 
-### 重试 API 请求示例
+### Retry API Request Example
 
-当某步骤失败时，可引导用户调用重试接口，从指定步骤重新执行：
+When a step fails, guide the user to call the retry endpoint to resume from that step:
 
 ```json
 {
@@ -317,27 +319,27 @@ https://assets.giggle.pro/private/ai_director/348e4956c7bd4f763b/qzjc7gwkpf.mp4
 }
 ```
 
-说明：`current_step` 为需要重试的步骤名（如 `music-generate`、`storyboard`、`shot`、`editor`）。
+Note: `current_step` is the step name to retry (e.g. `music-generate`, `storyboard`, `shot`, `editor`).
 
-### create_and_submit（可选）
+### create_and_submit (Optional)
 
-如需仅「创建项目+提交任务」而不等待完成，使用 `create_and_submit`，**不要**分别调用 `create_project` 和 `submit_mv_task`：
+To only create the project and submit the task without waiting for completion, use `create_and_submit`. **Never** call `create_project` and `submit_mv_task` separately:
 
 ```python
 api = MVTrusteeAPI()
 r = api.create_and_submit(
-    project_name="我的 MV",
+    project_name="My MV",
     music_generate_type="prompt",
     aspect="16:9",
     reference_image_url="https://...",
-    prompt="轻快流行乐"
+    prompt="Upbeat pop music"
 )
-# 返回 project_id，可后续手动 query/pay
+# Returns project_id for manual query/pay later
 ```
 
-### 返回值
+### Return Value
 
-成功返回：
+Success:
 ```json
 {
     "code": 200,
@@ -351,4 +353,4 @@ r = api.create_and_submit(
 }
 ```
 
-失败返回错误信息。
+Failure returns an error message.

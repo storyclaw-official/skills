@@ -68,9 +68,9 @@ class TrusteeModeAPI:
             print("警告: 未安装 python-dotenv 库", file=sys.stderr)
             print("请运行: pip install python-dotenv", file=sys.stderr)
     
-    def create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
+    def _create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
-        创建项目
+        创建项目（仅供内部调用，不对外暴露 CLI）
         
         Args:
             name: 项目名称
@@ -597,16 +597,6 @@ def main():
     
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
     
-    # 创建项目命令
-    create_parser = subparsers.add_parser('create', help='创建项目')
-    create_parser.add_argument('--name', required=True, help='项目名称')
-    create_parser.add_argument('--type', required=True, choices=['mv', 'director', 'narration', 'short-film'], 
-                              help='项目类型: mv、director、narration 或 short-film')
-    create_parser.add_argument('--aspect', required=True, choices=['16:9', '9:16'],
-                               help='视频宽高比: 16:9 或 9:16')
-    create_parser.add_argument('--mode', default='trustee', choices=['professional', 'trustee'],
-                              help='项目模式 (默认: trustee)')
-    
     # 提交任务命令
     submit_parser = subparsers.add_parser('submit', help='提交任务')
     submit_parser.add_argument('--project-id', required=True, help='项目ID')
@@ -661,26 +651,7 @@ def main():
     # 只有在实际需要调用API时才初始化客户端（会检查requests）
     api = TrusteeModeAPI()
     
-    if args.command == 'create':
-        result = api.create_project(
-            name=args.name,
-            project_type=args.type,
-            aspect=args.aspect,
-            mode=args.mode
-        )
-        print_response(result, args.pretty)
-        
-        # 兼容不同的响应格式：code可能是字符串"200"或数字200
-        code = result.get("code")
-        if isinstance(code, str):
-            code = int(code) if code.isdigit() else 0
-        
-        if code == 0 or code == 200:
-            project_id = result.get("data", {}).get("project_id")
-            if project_id:
-                print(f"\n项目ID: {project_id}", file=sys.stderr)
-    
-    elif args.command == 'submit':
+    if args.command == 'submit':
         result = api.submit_task(
             project_id=args.project_id,
             diy_story=args.diy_story,

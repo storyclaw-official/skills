@@ -14,7 +14,7 @@ Claude Code / OpenClaw Agent 技能集合，每个技能目录是独立的 Skill
 | `kie-*` | 调用 kie.ai 平台 API |
 | `generating-*` | 路由入口，不直接调用 API |
 
-当前技能：`giggle-drama`、`giggle-aimv`、`giggle-music`、`giggle-image`、`giggle-screenplay`（纯 LLM）、`kie-nano-banana`、`kie-grok-imagine`、`generating-videos`（路由）。
+当前技能：`giggle-drama`、`giggle-aimv`、`giggle-music`、`giggle-generation-image`、`giggle-screenplay`（纯 LLM）、`kie-nano-banana`、`kie-grok-imagine`、`generating-videos`（路由）。
 
 ## 架构
 
@@ -62,7 +62,7 @@ metadata: {"openclaw": {"requires": {"env": ["API_KEY"], "bins": ["python3"]}, .
 所有 Python 脚本均遵循：
 - `--json`：输出结构化 JSON 到 stdout；进度/日志统一输出到 stderr
 - `--no-wait`：异步提交，立即返回 `{"status": "started", "task_id": "...", "log_file": "..."}` 到 stdout
-- `--query --poll`（giggle-image / giggle-drama）：同步轮询等待，每 5 秒查询一次，超时静默退出交给 Cron
+- `--query --poll`（giggle-generation-image / giggle-drama）：同步轮询等待，每 5 秒查询一次，超时静默退出交给 Cron
 - `--query`（giggle-music）exit code：`0` = 完成，`1` = 失败，`2` = 进行中（processing/pending）
 - `.sent` 文件防重复：`~/.openclaw/skills/<skill>/logs/<id>.sent`，完成推送后创建，防止 Cron 与同步路径双重推送
 - API Key 从环境变量或项目根目录 `.env` 文件读取（`python-dotenv`）
@@ -113,11 +113,11 @@ python3 giggle-music/scripts/giggle_music_api.py --prompt "测试" --no-wait
 # giggle-music：Phase 3 查询结果（exit 0=完成, 1=失败, 2=进行中）
 python3 giggle-music/scripts/giggle_music_api.py --query --task-id <task_id> --json
 
-# giggle-image：Phase 1 提交任务（返回 task_id）
-python3 giggle-image/scripts/seedream_api.py --prompt "测试" --no-wait --json
+# giggle-generation-image：Phase 1 提交任务（返回 task_id）
+python3 giggle-generation-image/scripts/seedream_api.py --prompt "测试" --no-wait --json
 
-# giggle-image：Phase 3 同步等待（含 .sent 防重复）
-python3 giggle-image/scripts/seedream_api.py --query --task-id <task_id> --poll --max-wait 180
+# giggle-generation-image：Phase 3 同步等待（含 .sent 防重复）
+python3 giggle-generation-image/scripts/seedream_api.py --query --task-id <task_id> --poll --max-wait 180
 
 # kie-nano-banana：图像生成
 python3 kie-nano-banana/scripts/kie_nano_banana_api.py --prompt "测试" --aspect-ratio 1:1 --resolution 2K --json
