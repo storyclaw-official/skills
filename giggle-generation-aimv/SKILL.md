@@ -1,6 +1,17 @@
 ---
 name: giggle-generation-aimv
 description: 当用户希望创建 AI 音乐视频（MV）时使用此技能——包括根据文字提示生成音乐或使用自定义歌词。触发词：生成 MV、音乐视频、为这首歌做视频、歌词视频、创建 MV、AI 音乐视频、音乐+视频、根据歌词生成视频。
+version: "0.0.1"
+license: MIT
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📂",
+        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "primaryEnv": "GIGGLE_API_KEY",
+      },
+  }
 ---
 
 # MV Trustee 模式 API 技能

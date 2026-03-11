@@ -1,6 +1,17 @@
 ---
 name: giggle-generation-image
 description: 当用户希望创建、生成或绘制图像时使用此技能——包括文生图、图生图风格迁移，或融合多张参考图。触发词：生成图片、画画、创建图片、AI 艺术、做一张照片、插画、生成视觉、需要一张图、风格迁移、参考图、Seedream。
+version: "0.0.1"
+license: MIT
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📂",
+        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "primaryEnv": "GIGGLE_API_KEY",
+      },
+  }
 ---
 
 # 使用 Seedream 生成图像
@@ -173,6 +184,8 @@ python3 scripts/seedream_api.py --query --task-id <task_id> --poll --max-wait 18
 - **必须原样转发 stdout**；不得增删改
 - 不要从方括号中提取 URL 单独展示
 - 不要发送裸 URL（飞书会截断包含 `_` 的 URL）
+
+**链接返回规范**：Markdown 链接 `[View image N](...)` 中的 URL 必须为**完整签名 URL**（含 Policy、Key-Pair-Id、Signature 等查询参数）。正确示例：`https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`。错误：不要返回仅含基础路径的未签名 URL（无查询参数）。脚本已自动处理 `~` 编码为 `%7E`，转发时保持原样。
 
 ---
 

@@ -1,6 +1,17 @@
 ---
 name: giggle-generation-image
 description: 通过 Generation API 使用多种模型（Seedream、Midjourney、Nano Banana）生成 AI 图像。支持文生图和图生图。当用户需要创建或生成图像时使用。使用场景：(1) 根据文字描述生成，(2) 使用参考图生成，(3) 自定义模型、画幅比例、分辨率。触发词：生成图片、画画、创建图片、AI 艺术、midjourney、seedream、nano-banana。
+version: "0.0.1"
+license: MIT
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📂",
+        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "primaryEnv": "GIGGLE_API_KEY",
+      },
+  }
 ---
 
 # Giggle 图像生成（多模型）
@@ -188,3 +199,5 @@ multiSelect: false
 按执行流程：发送消息 → 阶段 1 提交 → 阶段 2 注册 Cron → 阶段 3 同步等待。
 
 结果到达后将 exec stdout 原样转发给用户。
+
+**链接返回规范**：结果中的图像链接必须为**完整签名 URL**（含 Policy、Key-Pair-Id、Signature 等查询参数）。正确示例：`https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`。错误：不要返回仅含基础路径的未签名 URL（无查询参数）。

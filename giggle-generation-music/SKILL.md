@@ -1,6 +1,17 @@
 ---
 name: giggle-generation-music
 description: 当用户希望创建、生成或创作音乐时使用此技能——无论是文字描述、自定义歌词，还是纯乐器背景音乐。通过 Giggle.pro 生成 AI 音乐。触发词：生成音乐、写歌、创作歌曲、制作音乐、做一首歌、AI 音乐、背景音乐、为我作曲、带歌词的音乐、纯音乐、做 beats。支持三种模式：简化模式（文本提示 → AI 作曲）、自定义模式（用户提供歌词 + 风格 + 标题）、纯音乐模式（无人声）。
+version: "0.0.1"
+license: MIT
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📂",
+        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "primaryEnv": "GIGGLE_API_KEY",
+      },
+  }
 ---
 
 # Giggle 音乐
@@ -106,6 +117,8 @@ giggle-music task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```
+
+**链接返回规范**：stdout 中的音频链接必须为**完整签名 URL**（含 Policy、Key-Pair-Id、Signature 等查询参数）。正确示例：`https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`。错误：不要返回仅含基础路径的未签名 URL（无查询参数）。脚本已自动处理 `~` 编码为 `%7E`，转发时保持原样。
 
 **Cron 触发处理**（根据 exec stdout 判断；以下路径均 exit 0）：
 

@@ -1,6 +1,17 @@
 ---
 name: giggle-generation-videos
 description: 当用户希望生成视频、拍摄短片或查看可用视频风格时使用此技能。触发词：生成视频、制作视频、拍短片、AI 视频、根据故事生成视频、拍视频、我有故事想法、短剧、解说视频、电影感视频、有哪些视频风格。
+version: "0.0.1"
+license: MIT
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📂",
+        "requires": { "bins": ["curl", "jq"] },
+        "primaryEnv": "GIGGLE_API_KEY",
+      },
+  }
 ---
 
 # 视频生成（Trustee 模式 V2）

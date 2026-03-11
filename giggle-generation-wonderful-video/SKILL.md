@@ -1,6 +1,17 @@
 ---
 name: giggle-generation-wonderful-video
 description: 仅当用户明确提及「精彩视频」「wonderful video」或「wonderful-video」时使用此技能。此技能可生成角色驱动的 AI 视频。
+version: "0.0.1"
+license: MIT
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📂",
+        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "primaryEnv": "GIGGLE_API_KEY",
+      },
+  }
 ---
 
 # 精彩视频生成技能
@@ -139,6 +150,12 @@ result = api.execute_workflow(
     }
 }
 ```
+
+**链接返回规范**：返回给用户时，必须使用**完整签名 URL**（含 Policy、Key-Pair-Id、Signature 等查询参数）。正确示例：
+```
+https://assets.giggle.pro/private/.../xxx.mp4?Policy=...&Key-Pair-Id=...&Signature=...&response-content-disposition=attachment
+```
+错误：不要返回仅含基础路径的未签名 URL，例如 `https://assets.giggle.pro/private/.../xxx.mp4`（无查询参数）。
 
 失败时：
 ```json
