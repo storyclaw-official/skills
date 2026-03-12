@@ -28,17 +28,28 @@ metadata:
 
 ---
 
+### 阶段 0：引导用户选择音色与情绪（必须）
+
+**在提交任务前，必须先引导用户选择音色和情绪，不要使用默认值。**
+
+1. 执行 `--list-voices` 获取可用音色列表：
+
+```bash
+python3 scripts/text_to_audio_api.py --list-voices
+```
+
+2. 将音色列表以易读的方式展示给用户（包含 voice_id、name、style、gender 等信息），引导用户选择一个音色
+3. 询问用户期望的情绪（如 joy、sad、neutral、angry、surprise 等），如用户无特殊要求可选 neutral
+4. 用户确认音色和情绪后，再进入阶段 1 提交任务
+
+---
+
 ### 阶段 1：提交任务（exec 在 10 秒内完成）
 
 **先向用户发送消息**：「语音生成进行中，通常需要 10–30 秒，结果将自动发送。」
 
 ```bash
-# 基础用法（使用默认音色 Calm_Woman）
-python3 scripts/text_to_audio_api.py \
-  --text "我爱你" \
-  --no-wait --json
-
-# 指定音色、情绪、语速
+# 必须指定用户选择的音色和情绪
 python3 scripts/text_to_audio_api.py \
   --text "今天天气真好" \
   --voice-id "Calm_Woman" \
@@ -143,8 +154,8 @@ python3 scripts/text_to_audio_api.py --list-voices
 | 参数 | 必填 | 默认值 | 说明 |
 |-----|------|--------|------|
 | `--text` | 是 | - | 要合成的文本内容 |
-| `--voice-id` | 否 | Calm_Woman | 音色 ID，可通过 `--list-voices` 查看 |
-| `--emotion` | 否 | - | 情绪，如 joy、sad、neutral 等 |
+| `--voice-id` | 是 | - | 音色 ID，必须通过 `--list-voices` 获取并引导用户选择 |
+| `--emotion` | 是 | - | 情绪，如 joy、sad、neutral、angry、surprise 等，需引导用户选择 |
 | `--speed` | 否 | 1 | 语速倍率 |
 | `--list-voices` | - | - | 获取可用音色列表 |
 | `--query` | - | - | 查询任务状态 |
@@ -156,10 +167,9 @@ python3 scripts/text_to_audio_api.py --list-voices
 
 ## 交互引导
 
-**当用户请求较模糊时**：
+**每次生成语音前，必须完成以下交互**：
 
 1. 若用户未提供文本，询问：「您想把哪段文字转换成语音？」
-2. 若用户未指定音色，可先执行 `--list-voices` 展示可选音色，或使用默认音色直接生成。
-3. 若用户对情绪/语速有特殊要求，在命令中传入 `--emotion`、`--speed`。
-
-**当用户提供足够信息时**，直接执行阶段 1 提交 → 阶段 2 注册 Cron → 阶段 3 同步等待。
+2. **必须引导用户选择音色**：执行 `--list-voices` 获取音色列表，展示给用户并让用户选择，**不要使用默认音色**
+3. **必须引导用户选择情绪**：询问用户期望的情绪风格（如 joy、sad、neutral、angry、surprise 等）
+4. 用户确认文本、音色、情绪后，再执行阶段 1 提交 → 阶段 2 注册 Cron → 阶段 3 同步等待
