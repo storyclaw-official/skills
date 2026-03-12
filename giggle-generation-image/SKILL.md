@@ -58,7 +58,7 @@ python3 scripts/generation_api.py \
   --aspect-ratio 16:9 --resolution 2K \
   --no-wait --json
 
-# 图生图 - 需要参考图 URL
+# 图生图 - 参考图 URL
 python3 scripts/generation_api.py \
   --prompt "转换为油画风格，保持构图" \
   --reference-images "https://example.com/photo.jpg" \
@@ -148,8 +148,69 @@ python3 scripts/generation_api.py --query --task-id <task_id> --poll --max-wait 
 | `--aspect-ratio` | 16:9 | 16:9、9:16、1:1、3:4、4:3、2:3、3:2、21:9 |
 | `--resolution` | 2K | 文生图分辨率：1K、2K、4K（图生图部分支持） |
 | `--generate-count` | 1 | 生成的图像数量 |
-| `--reference-images` | - | 图生图参考 URL 列表 |
+| `--reference-images` | - | 图生图参考图，支持 URL、base64、asset_id |
 | `--watermark` | false | 是否添加水印（图生图） |
+
+---
+
+## 图生图参考图三种传入方式
+
+图生图 API 的 `reference_images` 为对象数组，每个元素可为以下三种格式之一（可混用）：
+
+### 方式一：URL
+
+```json
+{
+  "prompt": "一只可爱的橘猫坐在窗台上晒太阳，写实风格",
+  "reference_images": [
+    {
+      "url": "https://assets.ggltest.com/private/test_ai_director/0ebc2ffa7512a58df5/9y91pxl0hju.thumb.jpg?Expires=1772409599000&Key-Pair-Id=K271ZF3SQS38SK&Signature=..."
+    }
+  ],
+  "generate_count": 1,
+  "model": "nano-banana-2-fast",
+  "aspect_ratio": "16:9",
+  "watermark": false
+}
+```
+
+### 方式二：Base64
+
+```json
+{
+  "prompt": "一只可爱的橘猫坐在窗台上晒太阳，写实风格",
+  "reference_images": [
+    {
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    }
+  ],
+  "generate_count": 1,
+  "model": "nano-banana-2-fast",
+  "aspect_ratio": "16:9",
+  "watermark": false
+}
+```
+
+> Base64 格式：直接传递纯 Base64 编码字符串，勿添加 `data:image/xxx;base64,` 前缀。
+
+### 方式三：asset_id
+
+```json
+{
+  "prompt": "一只可爱的橘猫坐在窗台上晒太阳，写实风格",
+  "reference_images": [
+    {
+      "asset_id": "vvsdsfsdf"
+    }
+  ],
+  "generate_count": 1,
+  "model": "nano-banana-2-fast",
+  "aspect_ratio": "16:9",
+  "watermark": false
+}
+```
+
+> 多张参考图时，在 `reference_images` 数组中追加多个对象即可。
 
 ---
 

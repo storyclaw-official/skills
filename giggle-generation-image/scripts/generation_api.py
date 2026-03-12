@@ -6,7 +6,9 @@ giggle.pro Generation API 封装脚本
 API: POST /api/v1/generation/text-to-image, POST /api/v1/generation/image-to-image, GET /api/v1/generation/task/query
 """
 
+import base64
 import os
+import re
 import sys
 import time
 import json
@@ -124,6 +126,33 @@ def download_images(image_urls: List[str], output_dir: str) -> List[str]:
     return downloaded_files
 
 
+def _parse_reference_image(s: str) -> Dict[str, str]:
+    """
+    将字符串解析为 reference_images 单元素格式。
+    支持：URL、base64、asset_id（自动识别）
+    """
+    s = s.strip()
+    if not s:
+        raise ValueError("参考图不能为空")
+    if s.startswith(("http://", "https://")):
+        return {"url": s}
+    if re.match(r"^data:image/[^;]+;base64,", s):
+        raise ValueError(
+            "参考图包含 data:image/xxx;base64, 前缀，"
+            "请直接传递纯 Base64 编码字符串"
+        )
+    is_short_id = len(s) <= 32 and re.match(r"^[a-zA-Z0-9_-]+$", s)
+    if is_short_id:
+        return {"asset_id": s}
+    try:
+        decoded = base64.b64decode(s, validate=True)
+        if len(decoded) < 8:
+            raise ValueError("Base64 解码后数据过短，不是有效的图片")
+    except Exception:
+        raise ValueError("参考图不是有效的 Base64 编码")
+    return {"base64": s}
+
+
 class GenerationAPI:
     """giggle.pro Generation API 客户端"""
 
@@ -168,12 +197,14 @@ class GenerationAPI:
         aspect_ratio: str = "16:9",
         watermark: bool = False
     ) -> Dict[str, Any]:
-        """图生图"""
+        """图生图，支持 URL、base64、asset_id 三种参考图格式"""
         if model not in SUPPORTED_MODELS:
             raise ValueError(f"不支持的模型: {model}，支持: {', '.join(SUPPORTED_MODELS)}")
-        refs = [{"url": u.strip()} for u in reference_images if u.strip().startswith(("http://", "https://"))]
+        refs = []
+        for u in reference_images:
+            refs.append(_parse_reference_image(u))
         if not refs:
-            raise ValueError("图生图需要至少一张可访问的参考图 URL")
+            raise ValueError("图生图需要至少一张参考图（URL、base64 或 asset_id）")
         payload = {
             "prompt": prompt,
             "reference_images": refs,
@@ -223,7 +254,7 @@ def parse_args():
   # 文生图
   python generation_api.py --prompt "一只可爱的橘猫" --model midjourney --no-wait --json
 
-  # 图生图
+  # 图生图（URL / base64 / asset_id）
   python generation_api.py --prompt "转为油画风格" --reference-images "https://example.com/photo.jpg" --no-wait --json
 
   # 查询任务
@@ -235,7 +266,8 @@ def parse_args():
     parser.add_argument('--prompt', type=str, help='图像描述')
     parser.add_argument('--api-key', type=str, help='API 密钥')
     parser.add_argument('--task-id', type=str, help='任务 ID')
-    parser.add_argument('--reference-images', type=str, nargs='+', help='参考图 URL 列表')
+    parser.add_argument('--reference-images', type=str, nargs='+',
+                        help='参考图列表，支持 URL、base64 字符串、asset_id')
     parser.add_argument('--generate-count', type=int, default=1, help='生成数量')
     parser.add_argument('--model', type=str, default='seedream45',
                         choices=list(SUPPORTED_MODELS), help='模型')
