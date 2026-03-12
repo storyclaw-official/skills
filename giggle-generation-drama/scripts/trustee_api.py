@@ -110,9 +110,11 @@ class TrusteeModeAPI:
     
     def _create_and_submit(self, project_name: str, project_type: str, diy_story: str,
                            aspect: str, video_duration: str, language: str,
-                           style_id: Optional[int] = None) -> Dict[str, Any]:
+                           style_id: Optional[int] = None,
+                           character_info: Optional[list] = None) -> Dict[str, Any]:
         """
         创建项目并提交任务（合并为一步，仅供内部调用）
+        character_info: [{"name": "角色名", "url": "图片URL"}, ...]
         返回 project_id 或错误信息
         """
         url_create = f"{self.base_url}/api/v1/project/create"
@@ -157,6 +159,8 @@ class TrusteeModeAPI:
             }
             if style_id is not None:
                 data_submit["style_id"] = style_id
+            if character_info is not None and len(character_info) > 0:
+                data_submit["character_info"] = character_info
 
             response = self.session.post(url_submit, json=data_submit)
             response.raise_for_status()
@@ -338,7 +342,8 @@ class TrusteeModeAPI:
     
     def execute_workflow(self, diy_story: str, aspect: str, project_name: str,
                         video_duration: str = "auto", style_id: Optional[int] = None,
-                        project_type: str = "director") -> Dict[str, Any]:
+                        project_type: str = "director",
+                        character_info: Optional[list] = None) -> Dict[str, Any]:
         """
         执行完整工作流（一步完成：创建项目+提交任务 -> 查询进度 -> 支付 -> 等待完成）
         
@@ -349,6 +354,7 @@ class TrusteeModeAPI:
             video_duration: 视频时长 (auto/30/60/120/180/240/300)，默认为"auto"
             style_id: 风格ID（可选）
             project_type: 项目类型 (director/narration/short-film)，默认为"director"（短剧模式）
+            character_info: 角色图片（可选），格式: [{"name": "角色名", "url": "图片URL"}, ...]
         
         Returns:
             包含下载链接的响应数据，或失败信息
@@ -367,7 +373,8 @@ class TrusteeModeAPI:
             aspect=aspect,
             video_duration=video_duration,
             language=language,
-            style_id=style_id
+            style_id=style_id,
+            character_info=character_info
         )
 
         code = create_submit_result.get("code")
@@ -641,6 +648,8 @@ def main():
     workflow_parser.add_argument('--project-type', default='director', dest='project_type',
                                 choices=['director', 'narration', 'short-film'],
                                 help='项目类型: director（短剧模式）、narration（旁白模式）或 short-film（短片模式）（默认: director）')
+    workflow_parser.add_argument('--character-info', dest='character_info',
+                                help='角色图片 JSON，格式: [{"name":"角色名","url":"图片URL"}]')
     
     args = parser.parse_args()
     
@@ -769,13 +778,21 @@ def main():
             print_response(result, args.pretty)
     
     elif args.command == 'workflow':
+        character_info = None
+        if getattr(args, 'character_info', None):
+            try:
+                character_info = json.loads(args.character_info)
+            except json.JSONDecodeError:
+                print("错误: character-info 必须是有效的 JSON 数组", file=sys.stderr)
+                sys.exit(1)
         result = api.execute_workflow(
             diy_story=args.diy_story,
             aspect=args.aspect,
             project_name=args.project_name,
             video_duration=args.video_duration,
             style_id=args.style_id if hasattr(args, 'style_id') and args.style_id is not None else None,
-            project_type=args.project_type
+            project_type=args.project_type,
+            character_info=character_info
         )
         print_response(result, args.pretty)
 

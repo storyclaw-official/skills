@@ -1,6 +1,6 @@
 ---
-name: giggle-generation-videos
-description: 当用户希望生成视频、拍摄短片或查看可用视频风格时使用此技能。触发词：生成视频、制作视频、拍短片、AI 视频、根据故事生成视频、拍视频、我有故事想法、短剧、解说视频、电影感视频、有哪些视频风格。
+name: giggle-generation-drama
+description: 当用户希望生成视频、拍摄短片或查看可用视频风格时使用此技能。触发词：短片、制作视频、拍短片、AI视频、根据故事生成视频、拍视频、我有故事想法、短剧、解说视频、电影感视频、有哪些视频风格。
 version: "0.0.1"
 license: MIT
 metadata:
@@ -8,15 +8,11 @@ metadata:
     "openclaw":
       {
         "emoji": "📂",
-        "requires": { "bins": ["curl", "jq"] },
+        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
         "primaryEnv": "GIGGLE_API_KEY",
       },
   }
 ---
-
-# 视频生成（Trustee 模式 V2）
-
-调用 Giggle.pro Trustee 模式 V2 API，从项目创建到最终视频完成，运行完整视频生成工作流。
 
 ## 首次使用前的配置（必选）
 
@@ -46,9 +42,9 @@ metadata:
 
 ## 主工作流：execute_workflow
 
-使用 `execute_workflow` 一次性运行完整工作流：创建项目 + 提交任务 + 轮询 + 自动支付（如需要）+ 等待完成。只需调用一次并等待返回。
+使用 `execute_workflow` 一次性运行完整工作流：提交任务 + 轮询 + 自动支付（如需要）+ 等待完成。只需调用一次并等待返回。
 
-1. 创建项目并提交任务（合并）
+1. 提交任务
 2. 每 3 秒轮询进度
 3. 检测待支付并自动支付（如需要）
 4. 等待完成（最长 1 小时）
@@ -58,12 +54,13 @@ metadata:
 
 ```python
 execute_workflow(
-    diy_story: str,                    # 故事/剧本内容（必填）
-    aspect: str,                       # 画幅比例：16:9 或 9:16（必填）
-    project_name: str,                 # 项目名称（必填）
-    video_duration: str = "auto",       # 时长，默认 "auto"（可选）
-    style_id: Optional[int] = None,    # 风格 ID（可选）
-    project_type: str = "director"     # 模式，默认 "director"（可选）
+    diy_story: str,                           # 故事/剧本内容（必填）
+    aspect: str,                              # 画幅比例：16:9 或 9:16（必填）
+    project_name: str,                        # 项目名称（必填）
+    video_duration: str = "auto",             # 时长，默认 "auto"（可选）
+    style_id: Optional[int] = None,           # 风格 ID（可选）
+    project_type: str = "director",           # 模式，默认 "director"（可选）
+    character_info: Optional[List[Dict]] = None  # 角色图片（可选）
 )
 ```
 
@@ -77,14 +74,27 @@ execute_workflow(
 | video_duration | 否 | 可选值：`auto`、`30`、`60`、`120`、`180`、`240`、`300`；默认 `"auto"` |
 | style_id | 否 | 风格 ID；未指定时可省略 |
 | project_type | 否 | `director` / `narration` / `short-film`；默认 `"director"` |
+| character_info | 否 | 角色图片列表，格式：`[{"name": "角色名", "url": "图片URL"}, ...]` |
 
 ### 使用流程
 
-1. **请用户选择生成模式**（剧集 / 解说 / 短片）。若未指定则默认剧集模式。
+1. **介绍并选择生成模式**（必须）：在生成前，**必须先向用户介绍三种模式的特点**，再让用户选择。展示如下：
+
+   > 我们支持三种视频生成模式，请选择：
+   >
+   > **🎬 剧集模式（director）**：AI 导演自动分镜、设计镜头语言，适合有角色对话和剧情推进的短剧。
+   >
+   > **🎙️ 解说模式（narration）**：以旁白为核心，配合画面素材，适合知识科普、新闻解读、产品介绍等解说类视频。
+   >
+   > **🎥 短片模式（short-film）**：故事与视觉兼顾，具有电影感的镜头与叙事节奏，适合情感短片、创意故事、艺术表达。
+
+   等待用户明确选择后再继续。若用户未指定则默认剧集模式。
+
 2. **若用户希望选择风格**：调用 `get_styles()` 获取风格列表，展示 ID、名称、分类、描述；等待用户选择后再继续。
-3. **运行工作流**：
+3. **若用户提供了角色图片 URL**：构建 `character_info` 数组传入，每个角色包含 `name`（角色名）和 `url`（图片 URL）。
+4. **运行工作流**：
    - 用故事内容、画幅比例、项目名称调用 `execute_workflow()`。
-   - 根据用户选择的模式设置 `project_type`；若用户指定了时长则传入 `video_duration`（否则默认 `"auto"`）；若用户选择了风格则传入 `style_id`。
+   - 根据用户选择的模式设置 `project_type`；若用户指定了时长则传入 `video_duration`（否则默认 `"auto"`）；若用户选择了风格则传入 `style_id`；若用户提供了角色图片则传入 `character_info`。
    - **调用一次并等待返回** — 函数内部完成创建、提交、轮询、支付和完成，最后返回下载链接或错误。
 
 ### 示例
@@ -151,6 +161,20 @@ result = api.execute_workflow(
     aspect="16:9",
     project_name="短片",
     project_type="short-film"
+)
+```
+
+**指定角色图片**（用户提供角色形象 URL 时）：
+
+```python
+result = api.execute_workflow(
+    diy_story="小明和小红在公园偶遇，两人相视而笑...",
+    aspect="16:9",
+    project_name="角色定制视频",
+    character_info=[
+        {"name": "小明", "url": "https://xxx/xiaoming.jpg"},
+        {"name": "小红", "url": "https://xxx/xiaohong.jpg"}
+    ]
 )
 ```
 
