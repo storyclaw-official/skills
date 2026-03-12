@@ -1,7 +1,7 @@
 ---
 
 name: giggle-generation-video
-description: 通过 Generation API 使用 AI 模型（grok 等）生成视频。支持文生视频和图生视频（首帧/尾帧）。当用户需要生成视频、制作短视频、文字转视频时使用。使用场景：(1) 根据文字描述生成视频，(2) 使用参考图作为首帧/尾帧生成视频，(3) 自定义模型、画幅比例、时长、分辨率。触发词：生成视频、制作视频、文生视频、图生视频、AI 视频、text-to-video、image-to-video。
+description: 支持文生视频和图生视频（首帧/尾帧）。当用户需要生成视频、制作短视频、文字转视频时使用。使用场景：(1) 根据文字描述生成视频，(2) 使用参考图作为首帧/尾帧生成视频，(3) 自定义模型、画幅比例、时长、分辨率。触发词：生成视频、、文生视频、图生视频、AI 视频、text-to-video、image-to-video。
 version: "0.0.1"
 license: MIT
 metadata:
