@@ -5,8 +5,10 @@ MV 托管模式 API 调用脚本
 """
 
 import argparse
+import base64
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -146,6 +148,29 @@ class MVTrusteeAPI:
             "data": {"project_id": project_id, **submit_result.get("data", {})},
         }
 
+    @staticmethod
+    def _validate_base64_image(value: str, field_name: str) -> Optional[str]:
+        """校验 base64 格式的参考图，返回错误信息或 None"""
+        if not value:
+            return None
+        if value.startswith(("http://", "https://")):
+            return None
+        if re.match(r"^data:image/[^;]+;base64,", value):
+            return (
+                f"{field_name} 包含 data:image/xxx;base64, 前缀，"
+                "请直接传递纯 Base64 编码字符串，不要添加前缀"
+            )
+        is_short_id = len(value) <= 32 and re.match(r"^[a-zA-Z0-9_-]+$", value)
+        if is_short_id:
+            return None
+        try:
+            decoded = base64.b64decode(value, validate=True)
+            if len(decoded) < 8:
+                return f"{field_name} 的 Base64 解码后数据过短，不是有效的图片"
+        except Exception:
+            return f"{field_name} 不是有效的 Base64 编码字符串，请检查格式"
+        return None
+
     def submit_mv_task(
         self,
         project_id: str,
@@ -181,6 +206,14 @@ class MVTrusteeAPI:
             lyrics, style, title: 自定义模式参数
             music_asset_id: 上传模式参数
         """
+        for val, name in [
+            (reference_image, "reference_image"),
+            (reference_image_url, "reference_image_url"),
+        ]:
+            err = self._validate_base64_image(val, name)
+            if err:
+                raise ValueError(err)
+
         url = f"{self.base_url}/api/v1/trustee_mode/mv/submit"
         data = {
             "project_id": project_id,
