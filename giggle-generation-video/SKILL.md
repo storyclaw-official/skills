@@ -1,4 +1,5 @@
 ---
+
 name: giggle-generation-video
 description: 通过 Generation API 使用 AI 模型（grok 等）生成视频。支持文生视频和图生视频（首帧/尾帧）。当用户需要生成视频、制作短视频、文字转视频时使用。使用场景：(1) 根据文字描述生成视频，(2) 使用参考图作为首帧/尾帧生成视频，(3) 自定义模型、画幅比例、时长、分辨率。触发词：生成视频、制作视频、文生视频、图生视频、AI 视频、text-to-video、image-to-video。
 version: "0.0.1"
@@ -11,8 +12,8 @@ metadata:
         "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
         "primaryEnv": "GIGGLE_API_KEY",
       },
-  }
----
+
+##   }
 
 # Giggle 视频生成
 
@@ -24,21 +25,23 @@ metadata:
 
 ## 支持的模型
 
-| 模型 | 支持时长（秒） | 默认时长 | 说明 |
-|------|--------------|---------|------|
-| grok | 6, 10 | 6 | 综合能力强，推荐 |
-| grok-fast | 6, 10 | 6 | grok 快速版 |
-| sora2 | 4, 8, 12 | 4 | OpenAI Sora 2 |
-| sora2-pro | 4, 8, 12 | 4 | Sora 2 Pro 版 |
-| sora2-fast | 10, 15 | 10 | Sora 2 快速版 |
-| sora2-pro-fast | 10, 15 | 10 | Sora 2 Pro 快速版 |
-| kling25 | 5, 10 | 5 | 快影视频模型 |
-| seedance15-pro | 4, 8, 12 | 4 | Seedance Pro（含音频） |
-| seedance15-pro-no-audio | 4, 8, 12 | 4 | Seedance Pro（无音频） |
-| veo31 | 4, 6, 8 | 4 | Google Veo 3.1（含音频） |
-| veo31-no-audio | 4, 6, 8 | 4 | Google Veo 3.1（无音频） |
-| minimax23 | 6 | 6 | MiniMax 模型 |
-| wan25 | 5, 10 | 0 | 万象模型 |
+
+| 模型                      | 支持时长（秒）  | 默认时长 | 说明                  |
+| ----------------------- | -------- | ---- | ------------------- |
+| grok                    | 6, 10    | 6    | 综合能力强，推荐            |
+| grok-fast               | 6, 10    | 6    | grok 快速版            |
+| sora2                   | 4, 8, 12 | 4    | OpenAI Sora 2       |
+| sora2-pro               | 4, 8, 12 | 4    | Sora 2 Pro 版        |
+| sora2-fast              | 10, 15   | 10   | Sora 2 快速版          |
+| sora2-pro-fast          | 10, 15   | 10   | Sora 2 Pro 快速版      |
+| kling25                 | 5, 10    | 5    | 快影视频模型              |
+| seedance15-pro          | 4, 8, 12 | 4    | Seedance Pro（含音频）   |
+| seedance15-pro-no-audio | 4, 8, 12 | 4    | Seedance Pro（无音频）   |
+| veo31                   | 4, 6, 8  | 4    | Google Veo 3.1（含音频） |
+| veo31-no-audio          | 4, 6, 8  | 4    | Google Veo 3.1（无音频） |
+| minimax23               | 6        | 6    | MiniMax 模型          |
+| wan25                   | 5, 10    | 0    | 万象模型                |
+
 
 **注意**：`--duration` 必须从对应模型的「支持时长」中选择，否则 API 会报错。
 
@@ -48,11 +51,13 @@ metadata:
 
 图生视频的 `--start-frame` 和 `--end-frame` 支持三种互斥方式：
 
-| 方式 | 格式 | 示例 |
-|------|------|------|
-| asset_id | `asset_id:<ID>` | `asset_id:lkllv0yv81` |
-| url | `url:<URL>` | `url:https://example.com/img.jpg` |
-| base64 | `base64:<DATA>` | `base64:iVBORw0KGgo...` |
+
+| 方式       | 格式              | 示例                                |
+| -------- | --------------- | --------------------------------- |
+| asset_id | `asset_id:<ID>` | `asset_id:lkllv0yv81`             |
+| url      | `url:<URL>`     | `url:https://example.com/img.jpg` |
+| base64   | `base64:<DATA>` | `base64:iVBORw0KGgo...`           |
+
 
 每个帧参数只能选择其中一种方式。
 
@@ -103,11 +108,13 @@ python3 scripts/generation_api.py \
 ```
 
 响应示例：
+
 ```json
 {"status": "started", "task_id": "55bf24ca-e92a-4d9b-a172-8f585a7c5969"}
 ```
 
 **立即将 task_id 存入记忆**（`addMemory`）：
+
 ```
 giggle-generation-video task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```
@@ -138,11 +145,13 @@ giggle-generation-video task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 
 **Cron 触发处理**（根据 exec stdout 判断）：
 
-| stdout 模式 | 动作 |
-|------------|------|
-| 非空纯文本（不以 `{` 开头） | **原样转发给用户**，**移除 Cron** |
-| stdout 为空 | 已推送，**立即移除 Cron，不发送消息** |
-| JSON（以 `{` 开头，含 `"status"` 字段） | 不发送消息，不移除 Cron，继续等待 |
+
+| stdout 模式                      | 动作                      |
+| ------------------------------ | ----------------------- |
+| 非空纯文本（不以 `{` 开头）               | **原样转发给用户**，**移除 Cron** |
+| stdout 为空                      | 已推送，**立即移除 Cron，不发送消息** |
+| JSON（以 `{` 开头，含 `"status"` 字段） | 不发送消息，不移除 Cron，继续等待     |
+
 
 ---
 
@@ -172,17 +181,21 @@ python3 scripts/generation_api.py --query --task-id <task_id> --poll --max-wait 
 
 ## 参数速查
 
-| 参数 | 默认值 | 说明 |
-|-----|--------|------|
-| `--prompt` | 必填 | 视频描述 prompt |
-| `--model` | grok | 见「支持的模型」表 |
-| `--duration` | 模型默认 | 必须从模型支持的时长中选择 |
-| `--aspect-ratio` | 16:9 | 16:9、9:16、1:1、3:4、4:3 |
-| `--resolution` | 720p | 分辨率：480p、720p、1080p |
-| `--start-frame` | - | 图生视频首帧，格式：`asset_id:ID`、`url:URL` 或 `base64:DATA` |
-| `--end-frame` | - | 图生视频尾帧，格式同首帧 |
+
+| 参数               | 默认值  | 说明                                                |
+| ---------------- | ---- | ------------------------------------------------- |
+| `--prompt`       | 必填   | 视频描述 prompt                                       |
+| `--model`        | grok | 见「支持的模型」表                                         |
+| `--duration`     | 模型默认 | 必须从模型支持的时长中选择                                     |
+| `--aspect-ratio` | 16:9 | 16:9、9:16、1:1、3:4、4:3                             |
+| `--resolution`   | 720p | 分辨率：480p、720p、1080p                               |
+| `--start-frame`  | -    | 图生视频首帧，格式：`asset_id:ID`、`url:URL` 或 `base64:DATA` |
+| `--end-frame`    | -    | 图生视频尾帧，格式同首帧                                      |
+
 
 ---
+
+注：base64参数支持 base64 编码图片，例如 `"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="`, base64 格式：请直接传递 Base64 编码字符串，勿添加 data:image/xxx;base64前缀
 
 ## 交互引导流程
 
@@ -195,16 +208,19 @@ python3 scripts/generation_api.py --query --task-id <task_id> --poll --max-wait 
 > 请选择视频生成模型：
 >
 > **推荐模型：**
+>
 > - **grok** — 综合能力强，支持 6/10 秒（推荐）
 > - **grok-fast** — grok 快速版，支持 6/10 秒
 >
 > **Sora 系列：**
+>
 > - **sora2** — OpenAI Sora 2，支持 4/8/12 秒
 > - **sora2-pro** — Sora 2 Pro 版，支持 4/8/12 秒
 > - **sora2-fast** — Sora 2 快速版，支持 10/15 秒
 > - **sora2-pro-fast** — Sora 2 Pro 快速版，支持 10/15 秒
 >
 > **其他模型：**
+>
 > - **kling25** — 快影，支持 5/10 秒
 > - **seedance15-pro** — Seedance Pro（含音频），支持 4/8/12 秒
 > - **seedance15-pro-no-audio** — Seedance Pro（无音频），支持 4/8/12 秒

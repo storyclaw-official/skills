@@ -40,11 +40,10 @@ metadata:
 |------|---------------------|-----------------|-------------|
 | **提示模式** | `prompt` | prompt、vocal_gender | 用文字描述音乐 |
 | **自定义模式** | `custom` | lyrics、style、title | 提供歌词、风格和标题 |
-| **上传模式** | `upload` | music_asset_id | 使用已上传的音乐素材 |
 
 ### 所有模式共用参数（必填）
 
-- **reference_image** 或 **reference_image_url**：参考图——至少提供其一（asset_id 或下载 URL）。该字段也支持 base64 编码图片，例如 `"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="`
+- **reference_image** 或 **reference_image_url**：参考图——至少提供其一（asset_id 或下载 URL）。该字段也支持 base64 编码图片，例如 `"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="`, base64 格式：请直接传递 Base64 编码字符串，勿添加 data:image/xxx;base64前缀
 - **aspect**：画幅比例，`16:9` 或 `9:16`
 - **scene_description**：视觉场景描述，**默认空**——仅当用户明确提及场景时设置（最多 200 字）
 - **subtitle_enabled**：是否启用字幕，**默认 false**
@@ -61,9 +60,6 @@ metadata:
 - `style`：音乐风格（必填）
 - `title`：歌曲标题（必填）
 
-**上传模式**：
-- `music_asset_id`：已有音乐素材 ID（必填）
-
 ## 工作流函数
 
 使用 `execute_workflow` 运行完整工作流——**调用一次并等待**。内部处理：创建项目 + 提交任务（合并）→ 轮询进度（每 3 秒）→ 检测并支付待支付项 → 等待完成（最长 1 小时）。
@@ -76,7 +72,7 @@ metadata:
 
 ```python
 execute_workflow(
-    music_generate_type: str,      # 模式：prompt / custom / upload
+    music_generate_type: str,      # 模式：prompt / custom
     aspect: str,                   # 画幅比例：16:9 或 9:16
     project_name: str,             # 项目名称
     reference_image: str = "",     # 参考图 asset_id（与 reference_image_url 二选一）
@@ -91,8 +87,6 @@ execute_workflow(
     lyrics: str = "",
     style: str = "",
     title: str = "",
-    # 上传模式
-    music_asset_id: str = "",
 )
 ```
 
@@ -102,7 +96,7 @@ execute_workflow(
 2. **scene_description**：默认空——仅当用户明确提及「场景」「视觉描述」或「视觉风格」时填写。
 3. **subtitle_enabled**：默认 False——仅当用户明确要求字幕时设为 True。
 4. **aspect**：用户提及竖屏/垂直/9:16 时用 `9:16`；否则默认 `16:9`。
-5. **模式选择**：「描述音乐 / 用提示」→ prompt；「这是我的歌词 / 歌词是」→ custom；「上传音乐 / 用我的音频」→ upload。
+5. **模式选择**：「描述音乐 / 用提示」→ prompt；「这是我的歌词 / 歌词是」→ custom；
 
 ### 示例
 
@@ -129,17 +123,6 @@ result = api.execute_workflow(
     lyrics="Verse 1: 春风拂面...",
     style="pop",
     title="春歌"
-)
-```
-
-**上传模式**：
-```python
-result = api.execute_workflow(
-    music_generate_type="upload",
-    aspect="16:9",
-    project_name="上传音乐 MV",
-    reference_image="asset_yyy",
-    music_asset_id="music_asset_zzz"
 )
 ```
 
@@ -188,20 +171,6 @@ result = api.execute_workflow(
   "scene_description": "A couple walking on the beach at dusk, long shadows, orange-red sky gradient",
   "aspect": "9:16",
   "subtitle_enabled": false
-}
-```
-
-**上传模式**：
-
-```json
-{
-  "project_id": "0ea74500-9178-4693-b581-342d5e17994c",
-  "music_generate_type": "upload",
-  "music_asset_id": "music_asset_789",
-  "reference_image": "is45gnvumgd",
-  "scene_description": "City night scene, neon lights, dense traffic, rain-soaked streets reflecting light",
-  "aspect": "16:9",
-  "subtitle_enabled": true
 }
 ```
 
