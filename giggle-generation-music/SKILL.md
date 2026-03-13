@@ -20,7 +20,7 @@ metadata:
 
 ## 环境配置
 
-在项目根目录 `.env` 文件中配置 `GIGGLE_API_KEY`。详见 [SETUP.md](SETUP.md)。
+**API Key**：加载优先级 1) `~/.openclaw/.env`（优先）2) 系统环境变量 `GIGGLE_API_KEY`。详见 [SETUP.md](SETUP.md)。
 
 ---
 
@@ -51,7 +51,7 @@ metadata:
 
 音乐生成通常需要 1–3 分钟。采用「快速提交 + Cron 轮询」两阶段架构。
 
-> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 通过系统环境配置；脚本会自动读取。直接执行以下命令即可。
+> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 从 `~/.openclaw/.env` 或系统环境变量自动读取。直接执行以下命令即可。
 
 ---
 

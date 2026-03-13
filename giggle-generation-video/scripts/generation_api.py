@@ -290,17 +290,17 @@ def main():
     args = parse_args()
 
     if DOTENV_AVAILABLE:
-        for p in [Path.cwd() / ".env", Path(__file__).parent.parent / ".env",
-                  Path(__file__).parent.parent.parent / ".env"]:
-            if p.exists():
-                load_dotenv(p)
-                break
+        openclaw_env = Path.home() / ".openclaw" / ".env"
+        if openclaw_env.exists():
+            load_dotenv(openclaw_env, override=True)
 
     api_key = args.api_key or os.getenv("GIGGLE_API_KEY")
     if not api_key:
-        print("错误: 未设置 GIGGLE_API_KEY", file=sys.stderr)
-        print("  1. 项目根目录 .env 添加 GIGGLE_API_KEY=xxx", file=sys.stderr)
-        print("  2. export GIGGLE_API_KEY=xxx", file=sys.stderr)
+        openclaw_env = Path.home() / ".openclaw" / ".env"
+        print("错误: 未找到 GIGGLE_API_KEY，请任选一种方式配置：", file=sys.stderr)
+        print(f"  1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）", file=sys.stderr)
+        print("  2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
+        print("  API Key 可在 https://giggle.pro/ 账号设置中获取。", file=sys.stderr)
         sys.exit(1)
 
     client = GenerationAPI(api_key)

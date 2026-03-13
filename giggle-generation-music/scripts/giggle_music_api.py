@@ -262,25 +262,19 @@ def _write_music_log(task_id: str, prompt: str, status: str, submitted_at: str,
 
 
 def load_api_key() -> str:
-    """从 .env 文件加载 API 密钥"""
+    """加载 API 密钥，优先级：1) ~/.openclaw/.env  2) 系统环境变量 GIGGLE_API_KEY"""
     if DOTENV_AVAILABLE:
-        env_paths = [
-            Path.cwd() / ".env",
-            Path(__file__).parent.parent / ".env",
-            Path(__file__).parent.parent.parent / ".env",  # ~/.openclaw/skills/.env
-        ]
-
-        for env_path in env_paths:
-            if env_path.exists():
-                load_dotenv(env_path)
-                break
+        openclaw_env = Path.home() / ".openclaw" / ".env"
+        if openclaw_env.exists():
+            load_dotenv(openclaw_env, override=True)
 
     api_key = os.getenv("GIGGLE_API_KEY")
     if not api_key:
-        print("错误: 未设置API密钥", file=sys.stderr)
-        print("请在项目根目录创建 .env 文件，添加: GIGGLE_API_KEY=your-api-key", file=sys.stderr)
-        if not DOTENV_AVAILABLE:
-            print("提示: 请先安装 python-dotenv: pip install python-dotenv", file=sys.stderr)
+        openclaw_env = Path.home() / ".openclaw" / ".env"
+        print("错误: 未找到 GIGGLE_API_KEY，请任选一种方式配置：", file=sys.stderr)
+        print(f"  1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）", file=sys.stderr)
+        print("  2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
+        print("  API Key 可在 https://giggle.pro/ 账号设置中获取。", file=sys.stderr)
         sys.exit(1)
 
     return api_key

@@ -19,16 +19,17 @@ metadata:
 在执行任何操作前，确认用户已配置 API Key，以免工作流因认证失败而中断。
 
 - **API Key**：登录 [Giggle.pro](https://giggle.pro/) 并在账号设置中获取 API Key。
+- **加载优先级**：1) `~/.openclaw/.env`（优先） 2) 系统环境变量 `GIGGLE_API_KEY`
 - **配置方式（任选其一）**：
-  1. **项目根目录 `.env`**：复制 `env.example` 为 `.env`，并设置 `GIGGLE_API_KEY=your_api_key`
-  2. **环境变量**：`export GIGGLE_API_KEY=your_api_key`
+  1. **~/.openclaw/.env**（推荐）：创建 `~/.openclaw/.env`，添加 `GIGGLE_API_KEY=your_api_key`
+  2. **系统环境变量**：`export GIGGLE_API_KEY=your_api_key`
 
 **检查步骤**：
 
-1. 确认用户已在 `.env` 或环境变量中配置 `GIGGLE_API_KEY`。
-2. 若未配置，**提示用户**：
-   > 你好！在使用视频生成功能前，需要先配置 API Key。请前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，然后在项目根目录创建 `.env` 文件（参考 `env.example`），添加 `GIGGLE_API_KEY=your_api_key`，或通过环境变量设置。
-3. 等待用户确认后再继续工作流。
+1. 确认用户已在 `~/.openclaw/.env` 或系统环境变量中配置 `GIGGLE_API_KEY`。
+2. 若未配置，**引导用户**：
+   > 你好！在使用视频生成功能前，需要先配置 API Key。请前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，然后任选一种方式：在 `~/.openclaw/.env` 中添加 `GIGGLE_API_KEY=your_api_key`，或在终端执行 `export GIGGLE_API_KEY=your_api_key`。
+3. 等待用户配置后再继续工作流。
 
 ## 生成模式
 

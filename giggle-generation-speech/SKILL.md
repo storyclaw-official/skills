@@ -16,7 +16,7 @@ metadata:
 
 通过 giggle.pro 平台将文本合成为 AI 语音/配音。支持多种音色、情绪和语速。
 
-**API Key**：从环境变量 `GIGGLE_API_KEY` 或项目根目录 `.env` 文件中读取。
+**API Key**：加载优先级 1) `~/.openclaw/.env`（优先）2) 系统环境变量 `GIGGLE_API_KEY`。若未配置，脚本会提示配置。
 
 > **禁止内联 Python**：所有命令必须通过 `exec` 工具直接执行。**切勿**使用 heredoc 内联代码。
 
@@ -24,7 +24,7 @@ metadata:
 
 语音生成通常需要 10–30 秒。采用「快速提交 + Cron 轮询 + 同步兜底」三阶段架构。
 
-> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 通过系统环境配置；脚本会自动读取。
+> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 从 `~/.openclaw/.env` 或系统环境变量自动读取。
 
 ---
 

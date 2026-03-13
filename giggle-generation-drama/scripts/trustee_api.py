@@ -36,10 +36,12 @@ class TrusteeModeAPI:
         self._load_env()
         self.api_key = os.getenv("GIGGLE_API_KEY")
         if not self.api_key:
+            openclaw_env = Path.home() / ".openclaw" / ".env"
             raise ValueError(
-                "未找到 API 密钥。请确保：\n"
-                "1. 在项目根目录创建 .env 文件，添加 GIGGLE_API_KEY=your_api_key\n"
-                "2. 或通过环境变量设置 GIGGLE_API_KEY"
+                "未找到 GIGGLE_API_KEY，请任选一种方式配置：\n"
+                f"1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）\n"
+                "2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key\n"
+                "API Key 可在 [Giggle.pro](https://giggle.pro/) 账号设置中获取。"
             )
         self.base_url = "https://giggle.pro"
         self.session = requests.Session()
@@ -49,24 +51,14 @@ class TrusteeModeAPI:
         })
 
     def _load_env(self):
-        """从 .env 文件加载环境变量（支持项目根目录、技能目录、skills 目录）"""
+        """加载环境变量，优先级：1) ~/.openclaw/.env  2) 系统环境变量 GIGGLE_API_KEY"""
         try:
             from dotenv import load_dotenv
-            script_dir = Path(__file__).parent
-            env_paths = [
-                Path.cwd() / ".env",
-                script_dir.parent / ".env",
-                script_dir.parent.parent / ".env",
-            ]
-            for env_path in env_paths:
-                if env_path.exists():
-                    load_dotenv(env_path)
-                    break
-            else:
-                load_dotenv()
+            openclaw_env = Path.home() / ".openclaw" / ".env"
+            if openclaw_env.exists():
+                load_dotenv(openclaw_env, override=True)
         except ImportError:
-            print("警告: 未安装 python-dotenv 库", file=sys.stderr)
-            print("请运行: pip install python-dotenv", file=sys.stderr)
+            pass
     
     def _create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
