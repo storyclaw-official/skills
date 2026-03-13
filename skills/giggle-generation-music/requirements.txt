@@ -1,7 +1,4 @@
-# giggle-music 依赖包
+# giggle-generation-music 依赖包
 
 # HTTP 请求
 requests>=2.31.0
-
-# 环境变量管理（可选，用于 .env 文件支持）
-python-dotenv>=1.0.0

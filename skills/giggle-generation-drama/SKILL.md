@@ -1,36 +1,52 @@
 ---
 name: giggle-generation-drama
 description: Use when the user wants to generate video, shoot short films, or view available video styles. Triggers: short film, make video, shoot short, AI video, generate video from story, short drama, narration video, cinematic video, available video styles.
-version: "0.0.1"
+version: "0.0.2"
 license: MIT
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
     "openclaw":
       {
         "emoji": "📂",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
-        "primaryEnv": "GIGGLE_API_KEY",
+        "requires": {
+          "bins": ["python3"],
+          "env": ["GIGGLE_API_KEY"],
+          "pip": ["requests"]
+        },
+        "primaryEnv": "GIGGLE_API_KEY"
       },
   }
 ---
 
 [简体中文](./SKILL.zh-CN.md) | English
 
+## ⚠️ Review Before Installing
+
+**Please review before installing.** This skill will:
+
+1. **Network** – Calls Giggle.pro API for video generation
+
+**Requirements**: `python3`, `GIGGLE_API_KEY` (system environment variable), pip packages: `requests`
+
+---
+
 ## Required Setup Before First Use
 
 Before performing any operation, confirm the user has configured the API Key to avoid workflow failure due to auth errors.
 
 - **API Key**: Log in to [Giggle.pro](https://giggle.pro/) and obtain the API Key from account settings.
-- **Load priority**: 1) `~/.openclaw/.env` (preferred) 2) System environment variable `GIGGLE_API_KEY`
-- **Configuration** (choose one):
-  1. **~/.openclaw/.env** (recommended): Create `~/.openclaw/.env`, add `GIGGLE_API_KEY=your_api_key`
-  2. **System environment variable**: `export GIGGLE_API_KEY=your_api_key`
+- **Configuration**: Set system environment variable `GIGGLE_API_KEY`
+  - `export GIGGLE_API_KEY=your_api_key`
 
 **Verification steps**:
 
-1. Confirm the user has configured `GIGGLE_API_KEY` in `~/.openclaw/.env` or system environment.
+1. Confirm the user has configured `GIGGLE_API_KEY` in system environment.
 2. If not configured, **guide the user**:
-   > Hello! Before using the video generation feature, you need to configure the API Key. Please go to [Giggle.pro](https://giggle.pro/) to get your API Key, then either add `GIGGLE_API_KEY=your_api_key` to `~/.openclaw/.env` or run `export GIGGLE_API_KEY=your_api_key` in the terminal.
+   > Hello! Before using the video generation feature, you need to configure the API Key. Please go to [Giggle.pro](https://giggle.pro/) to get your API Key, then run `export GIGGLE_API_KEY=your_api_key` in the terminal.
 3. Wait for the user to configure before continuing the workflow.
 
 ## Generation Modes

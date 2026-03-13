@@ -1,13 +1,27 @@
 ---
 name: giggle-generation-speech
 description: 当用户希望生成语音、配音或文字转音频时使用此技能。通过 Giggle.pro 文转音 API 将文本合成为 AI 语音。触发词：生成语音、文转音、文字转语音、配音、TTS、朗读这段文字、把这段文字读出来、合成语音、我需要一段配音。
+version: "0.0.1"
+license: MIT
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
     "openclaw":
       {
         "emoji": "🔊",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "requires": {
+          "bins": ["python3"],
+          "env": ["GIGGLE_API_KEY"],
+          "pip": ["requests"]
+        },
         "primaryEnv": "GIGGLE_API_KEY",
+        "runtimeBehaviors": {
+          "writes": ["~/.openclaw/skills/giggle-generation-speech/logs/"],
+          "cron": "用户发起语音生成时注册轮询任务（30秒间隔）"
+        }
       },
   }
 ---
@@ -18,7 +32,19 @@ metadata:
 
 通过 giggle.pro 平台将文本合成为 AI 语音/配音。支持多种音色、情绪和语速。
 
-**API Key**：加载优先级 1) `~/.openclaw/.env`（优先）2) 系统环境变量 `GIGGLE_API_KEY`。若未配置，脚本会提示配置。
+## ⚠️ 安装前请阅读
+
+**安装前请确认以下内容。** 本技能将：
+
+1. **写入** `~/.openclaw/skills/giggle-generation-speech/logs/` – 任务状态文件，用于 Cron 去重
+2. **注册 Cron**（30 秒间隔） – 用户发起语音生成时的异步轮询；任务完成后移除
+3. **原样转发 stdout** – 脚本输出（音频链接、状态）直接呈现给用户
+
+**依赖要求**：`python3`、`GIGGLE_API_KEY`（系统环境变量）、pip 包：`requests`
+
+---
+
+**API Key**：设置系统环境变量 `GIGGLE_API_KEY`。若未配置，脚本会提示配置。
 
 > **禁止内联 Python**：所有命令必须通过 `exec` 工具直接执行。**切勿**使用 heredoc 内联代码。
 
@@ -26,7 +52,7 @@ metadata:
 
 语音生成通常需要 10–30 秒。采用「快速提交 + Cron 轮询 + 同步兜底」三阶段架构。
 
-> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 从 `~/.openclaw/.env` 或系统环境变量自动读取。
+> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 从系统环境变量读取。
 
 ---
 

@@ -1,28 +1,35 @@
 ---
 name: giggle-generation-music
 description: Use when the user wants to create, generate, or compose music—whether from text description, custom lyrics, or instrumental background music. Triggers: generate music, write a song, compose, create music, AI music, background music, instrumental, beats.
-version: "0.0.1"
+version: "0.0.8"
 license: MIT
+author: storyclaw-official
+homepage: https://github.com/storyclaw-official/storyclaw-skills
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
-  {
-    "openclaw":
-      {
-        "emoji": "📂",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
-        "primaryEnv": "GIGGLE_API_KEY",
-      },
-  }
+  openclaw:
+    emoji: "📂"
+    requires:
+      bins: [python3]
+      env: [GIGGLE_API_KEY]
+      pip: [requests]
+    primaryEnv: GIGGLE_API_KEY
 ---
 
 [简体中文](./SKILL.zh-CN.md) | English
 
 # Giggle Music
 
-Generates AI music via giggle.pro. Supports simplified and custom modes.
+**Source**: [storyclaw-official/storyclaw-skills](https://github.com/storyclaw-official/storyclaw-skills) · API: [giggle.pro](https://giggle.pro/)
 
-## Environment Setup
+Generates AI music via giggle.pro. Supports simplified and custom modes. Submit task → query when ready. No polling or Cron.
 
-**API Key**: Load priority 1) `~/.openclaw/.env` (preferred) 2) System environment variable `GIGGLE_API_KEY`. See [SETUP.md](SETUP.md).
+**API Key**: Set system environment variable `GIGGLE_API_KEY`. See [SETUP.md](SETUP.md).
+
+> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API Key is read from system environment variable.
 
 ---
 
@@ -49,21 +56,19 @@ Options: AI compose (describe style) / Use my lyrics / Instrumental
 
 ---
 
-## Execution Flow (Phase 1 Submit + Phase 2 Cron)
+## Execution Flow: Submit and Query
 
-Music generation typically takes 1–3 minutes. Uses "fast submit + Cron poll" two-phase architecture.
-
-> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API Key is read from `~/.openclaw/.env` or system environment. Run the following commands directly.
+Music generation is asynchronous (typically 1–3 minutes). **Submit** a task to get `task_id`, then **query** when the user wants to check status.
 
 ---
 
-### Phase 1: Submit Task (exec completes in ~10 seconds)
+### Step 1: Submit Task
 
-**First send a message to the user**: "Music generation in progress, usually takes 1–3 minutes. Results will be sent automatically."
+**First send a message to the user**: "Music generation submitted. Usually takes 1–3 minutes. You can ask me about the progress anytime."
 
 #### A: Simplified Mode
 ```bash
-python3 scripts/giggle_music_api.py --prompt "user description" --no-wait
+python3 scripts/giggle_music_api.py --prompt "user description"
 ```
 
 #### B: Custom Mode
@@ -72,67 +77,47 @@ python3 scripts/giggle_music_api.py --custom \
   --prompt "lyrics content" \
   --style "pop, ballad" \
   --title "Song Title" \
-  --vocal-gender female \
-  --no-wait
+  --vocal-gender female
 ```
 
 #### C: Instrumental
 ```bash
-python3 scripts/giggle_music_api.py --prompt "user description" --instrumental --no-wait
+python3 scripts/giggle_music_api.py --prompt "user description" --instrumental
 ```
 
 Response example:
 ```json
-{"status": "started", "task_id": "xxx", "log_file": "/path/to/log"}
+{"status": "started", "task_id": "xxx"}
 ```
 
-**Immediately store task_id in memory** (`addMemory`):
+**Store task_id in memory** (`addMemory`):
 ```
-giggle-music task_id: xxx (submitted: YYYY-MM-DD HH:mm)
+giggle-generation-music task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```
 
 ---
 
-### Phase 2: Register Cron (2 minute interval, wakeMode: "now")
+### Step 2: Query When User Asks
 
-Use the `cron` tool to register the polling job. **Strictly follow the parameter format; do not modify field names or add extra fields**:
+When the user asks about music progress (e.g. "is my music ready?", "progress?"), run:
 
-```json
-{
-  "action": "add",
-  "job": {
-    "name": "giggle-music-<first 8 chars of task_id>",
-    "schedule": {
-      "kind": "every",
-      "everyMs": 120000
-    },
-    "payload": {
-      "kind": "systemEvent",
-      "text": "Music task poll: exec python3 scripts/giggle_music_api.py --query --task-id <full task_id>, handle stdout per Cron logic. If stdout is non-JSON plain text, forward to user as-is and remove Cron. If stdout is JSON, do not send message, keep waiting. If stdout is empty, remove Cron immediately."
-    },
-    "sessionTarget": "main"
-  }
-}
-```
-
-On each Cron trigger, run:
 ```bash
 python3 scripts/giggle_music_api.py --query --task-id <task_id>
 ```
 
-**Link return rule**: Audio links in stdout must be **full signed URLs** (with Policy, Key-Pair-Id, Signature query params). Correct: `https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`. Wrong: do not return unsigned URLs with only the base path (no query params). The script handles `~` as `%7E`; keep as-is when forwarding.
-
-**Cron trigger handling** (based on exec stdout; all paths exit 0):
+**Output handling**:
 
 | stdout pattern | Action |
 |----------------|--------|
-| Non-empty plain text (not starting with `{`) | **Forward stdout to user as-is** (no prefix, no changes), **remove Cron** |
-| stdout empty | Already pushed, **remove Cron immediately, do not send message** |
-| JSON (starts with `{`, has `"status"` field) | Do not send message, do not remove Cron, wait for next poll |
+| Plain text with music links (🎶 音乐已就绪) | Forward to user as-is |
+| Plain text with error | Forward to user as-is |
+| JSON `{"status": "processing", "task_id": "..."}` | Tell user "Still in progress, please ask again in a moment" |
+
+**Link return rule**: Audio links in stdout must be **full signed URLs** (with Policy, Key-Pair-Id, Signature query params). Correct: `https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`. Keep as-is when forwarding.
 
 ---
 
-## Recovery After Gateway Restart
+## Recovery
 
 When the user asks about previous music progress:
 
@@ -151,5 +136,5 @@ When the user asks about previous music progress:
 | `--title` | Song title (required in custom mode) |
 | `--instrumental` | Generate instrumental |
 | `--vocal-gender` | Vocal gender: male / female (custom mode only) |
-| `--query` | Query task status (Cron poll and manual) |
+| `--query` | Query task status |
 | `--task-id` | Task ID (use with --query) |

@@ -1,16 +1,25 @@
 ---
 name: giggle-generation-image
 description: 支持文生图和图生图。当用户需要创建或生成图像时使用。使用场景：(1) 根据文字描述生成，(2) 使用参考图生成，(3) 自定义模型、画幅比例、分辨率。触发词：生成图片、画画、创建图片、AI 艺术图
-version: "0.0.2"
+version: "0.0.9"
 license: MIT
+author: storyclaw-official
+homepage: https://github.com/storyclaw-official/storyclaw-skills
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
-    "openclaw":
-      {
-        "emoji": "📂",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
-        "primaryEnv": "GIGGLE_API_KEY",
+    "openclaw": {
+      "emoji": "📂",
+      "requires": {
+        "bins": ["python3"],
+        "env": ["GIGGLE_API_KEY"],
+        "pip": ["requests"]
       },
+      "primaryEnv": "GIGGLE_API_KEY"
+    }
   }
 ---
 
@@ -18,9 +27,11 @@ metadata:
 
 # Giggle 图像生成（多模型）
 
-通过 giggle.pro 平台的 Generation API 生成 AI 图像，支持多种模型。
+**来源**：[storyclaw-official/storyclaw-skills](https://github.com/storyclaw-official/storyclaw-skills) · API：[giggle.pro](https://giggle.pro/)
 
-**API Key**：加载优先级 1) `~/.openclaw/.env`（优先）2) 系统环境变量 `GIGGLE_API_KEY`。若未配置，脚本会提示配置。
+通过 giggle.pro 平台的 Generation API 生成 AI 图像，支持多种模型（Seedream、Midjourney、Nano Banana）。提交任务 → 需要时查询。无轮询、无 Cron。
+
+**API Key**：设置系统环境变量 `GIGGLE_API_KEY`。若未配置，脚本会提示配置。
 
 > **禁止内联 Python**：所有命令必须通过 `exec` 工具直接执行。**切勿**使用 `python3 << 'EOF'` 或 heredoc 内联代码。
 
@@ -35,17 +46,15 @@ metadata:
 
 ---
 
-## 执行流程（三阶段双路径）
+## 执行流程：提交与查询
 
-图像生成通常需要 30–120 秒。采用「快速提交 + Cron 轮询 + 同步兜底」三阶段架构。
+图像生成为异步（通常 30–120 秒）。**提交**任务获得 `task_id`，用户需要时再**查询**状态。
 
-> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 从 `~/.openclaw/.env` 或系统环境变量自动读取。
+> **重要**：**切勿**在 exec 的 `env` 参数中传递 `GIGGLE_API_KEY`。API Key 从系统环境变量读取。
 
 ---
 
-### 阶段 1：提交任务（exec 在 10 秒内完成）
-
-**先向用户发送消息**：「图像生成进行中，通常需要 30–120 秒，结果将自动发送。」
+### 步骤 1：提交任务
 
 ```bash
 # 文生图（默认 seedream45）
@@ -78,66 +87,33 @@ python3 scripts/generation_api.py \
 {"status": "started", "task_id": "xxx"}
 ```
 
-**立即将 task_id 存入记忆**（`addMemory`）：
+**将 task_id 存入记忆**（`addMemory`）：
 ```
 giggle-generation-image task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```
 
----
-
-### 阶段 2：注册 Cron（45 秒间隔）
-
-使用 `cron` 工具注册轮询任务。**必须严格遵循参数格式**：
-
-```json
-{
-  "action": "add",
-  "job": {
-    "name": "giggle-generation-image-<task_id 前 8 位>",
-    "schedule": {
-      "kind": "every",
-      "everyMs": 45000
-    },
-    "payload": {
-      "kind": "systemEvent",
-      "text": "图像任务轮询：执行 exec python3 scripts/generation_api.py --query --task-id <完整 task_id>，按 Cron 逻辑处理 stdout。若 stdout 为非 JSON 纯文本，发送给用户并移除 Cron。若 stdout 为 JSON，不发送消息，继续等待。若 stdout 为空，立即移除 Cron。"
-    },
-    "sessionTarget": "main"
-  }
-}
-```
-
-**Cron 触发处理**（根据 exec stdout 判断）：
-
-| stdout 模式 | 动作 |
-|------------|------|
-| 非空纯文本（不以 `{` 开头） | **原样转发给用户**，**移除 Cron** |
-| stdout 为空 | 已推送，**立即移除 Cron，不发送消息** |
-| JSON（以 `{` 开头，含 `"status"` 字段） | 不发送消息，不移除 Cron，继续等待 |
+**告知用户**：「图像生成已开始，通常需要 30–120 秒。您可以问我「好了吗？」来查看进度。」
 
 ---
 
-### 阶段 3：同步等待（乐观路径，Cron 未触发时的兜底）
-
-**无论 Cron 是否注册成功，都必须执行此步骤。**
+### 步骤 2：查询任务（用户询问状态时）
 
 ```bash
-python3 scripts/generation_api.py --query --task-id <task_id> --poll --max-wait 180
+python3 scripts/generation_api.py --query --task-id <task_id>
 ```
 
-**处理逻辑**：
-
-- 返回纯文本（图像就绪/失败消息） → **原样转发给用户**，移除 Cron
-- stdout 为空 → Cron 已推送，移除 Cron，不发送消息
-- exec 超时 → Cron 继续轮询
+**行为**：
+- **completed**：输出图片链接给用户
+- **failed/error**：输出错误信息
+- **processing/pending**：输出 JSON `{"status": "...", "task_id": "xxx"}`；用户可稍后再查
 
 ---
 
 ## 新请求 vs 查询旧任务
 
-**当用户发起新的图像生成请求**时，**必须执行阶段 1 提交新任务**，不要复用记忆中的旧 task_id。
+**当用户发起新的图像生成请求**时，执行提交创建新任务。不要复用记忆中的旧 task_id。
 
-**仅当用户明确询问之前任务的进度**时，才从记忆中查询旧 task_id。
+**当用户询问之前任务的进度**时（如「好了吗？」「查一下状态」），从记忆中取出 task_id 执行查询。
 
 ---
 
@@ -259,8 +235,6 @@ multiSelect: false
 
 ### 步骤 4：执行并展示
 
-按执行流程：发送消息 → 阶段 1 提交 → 阶段 2 注册 Cron → 阶段 3 同步等待。
-
-结果到达后将 exec stdout 原样转发给用户。
+提交任务 → 存储 task_id → 告知用户。用户询问状态时，执行查询并将 stdout 原样转发给用户。
 
 **链接返回规范**：结果中的图像链接必须为**完整签名 URL**（含 Policy、Key-Pair-Id、Signature 等查询参数）。正确示例：`https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`。错误：不要返回仅含基础路径的未签名 URL（无查询参数）。

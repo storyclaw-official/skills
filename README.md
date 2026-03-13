@@ -25,7 +25,7 @@ npx skills add . --list --full-depth
 - 🎨 **Multi-modal AI**: Image, video, music, speech, and script generation in one place.
 - 🎬 **Video production**: Text-to-video, image-to-video, short films, drama, and MV workflows.
 - 📝 **Story & script**: Jiang Wen–style screenplay generation with scene outlines and dialogue.
-- 🔐 **Local-first**: Skills run on your machine; API key stored in `~/.openclaw/.env`.
+- 🔐 **Local-first**: Skills run on your machine; API key from system environment variable `GIGGLE_API_KEY`.
 
 ## Available skills
 
@@ -50,14 +50,10 @@ python3 scripts/text_to_audio_api.py --list-voices
 
 ## Giggle API Key (required)
 
-Get your API key from [Giggle.pro](https://giggle.pro/) and configure:
+Get your API key from [Giggle.pro](https://giggle.pro/) and set system environment variable:
 
 ```bash
-# Option 1: ~/.openclaw/.env (recommended)
-echo "GIGGLE_API_KEY=your_api_key" >> ~/.openclaw/.env
-
-# Option 2: System environment variable
 export GIGGLE_API_KEY=your_api_key
 ```
 
-All skills use this key for authentication. Load priority: 1) `~/.openclaw/.env` 2) system environment.
+All skills read `GIGGLE_API_KEY` from system environment.

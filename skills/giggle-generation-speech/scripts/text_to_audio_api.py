@@ -18,13 +18,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-try:
-    from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
-
-
 class TaskStatus:
     COMPLETED = "completed"
     FAILED = "failed"
@@ -196,18 +189,11 @@ class TextToAudioAPI:
 
 
 def load_api_key() -> str:
-    """加载 API Key，优先级：1) ~/.openclaw/.env  2) 系统环境变量 GIGGLE_API_KEY"""
-    if DOTENV_AVAILABLE:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        if openclaw_env.exists():
-            load_dotenv(openclaw_env, override=True)
-
+    """加载 API Key，从系统环境变量 GIGGLE_API_KEY 读取"""
     api_key = os.getenv("GIGGLE_API_KEY")
     if not api_key:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        print("错误: 未找到 GIGGLE_API_KEY，请任选一种方式配置：", file=sys.stderr)
-        print(f"  1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）", file=sys.stderr)
-        print("  2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
+        print("错误: 未找到 GIGGLE_API_KEY，请设置系统环境变量：", file=sys.stderr)
+        print("  export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
         print("  API Key 可在 https://giggle.pro/ 账号设置中获取。", file=sys.stderr)
         sys.exit(1)
     return api_key

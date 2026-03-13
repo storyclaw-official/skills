@@ -25,7 +25,7 @@ npx skills add . --list --full-depth
 - 🎨 **多模态 AI**：图像、视频、音乐、语音、剧本生成一站搞定。
 - 🎬 **视频创作**：文生视频、图生视频、短片、短剧、MV 全流程支持。
 - 📝 **故事与剧本**：姜文式叙事风格，分场大纲与对白剧本生成。
-- 🔐 **本地优先**：技能在本地运行，API Key 存储在 `~/.openclaw/.env`。
+- 🔐 **本地优先**：技能在本地运行，API Key 从系统环境变量 `GIGGLE_API_KEY` 读取。
 
 ## 可用技能
 
@@ -50,14 +50,10 @@ python3 scripts/text_to_audio_api.py --list-voices
 
 ## Giggle API Key（必填）
 
-前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，并按以下方式配置：
+前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，并设置系统环境变量：
 
 ```bash
-# 方式一：~/.openclaw/.env（推荐）
-echo "GIGGLE_API_KEY=your_api_key" >> ~/.openclaw/.env
-
-# 方式二：系统环境变量
 export GIGGLE_API_KEY=your_api_key
 ```
 
-所有技能均使用该 Key 进行认证。加载优先级：1) `~/.openclaw/.env` 2) 系统环境变量。
+所有技能从系统环境变量读取 `GIGGLE_API_KEY`。

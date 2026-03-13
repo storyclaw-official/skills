@@ -8,21 +8,11 @@ API: POST /api/v1/generation/text-to-video, POST /api/v1/generation/image-to-vid
 
 import os
 import sys
-import time
 import json
 import argparse
 import requests
-from pathlib import Path
-from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
-
-try:
-    from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
-
 
 class TaskStatus(str, Enum):
     COMPLETED = "completed"
@@ -69,46 +59,6 @@ MODEL_DEFAULT_DURATION = {
 
 SUPPORTED_ASPECT_RATIOS = ("16:9", "9:16", "1:1", "3:4", "4:3")
 SUPPORTED_RESOLUTIONS = ("480p", "720p", "1080p")
-
-
-# ── 防重复推送（.sent 文件标记）────────────────────────────────────────────────
-def _get_log_dir() -> Path:
-    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-generation-video' / 'logs'
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir
-
-
-def _check_sent(task_id: str) -> bool:
-    return (_get_log_dir() / f"{task_id}.sent").exists()
-
-
-def _mark_sent(task_id: str) -> None:
-    (_get_log_dir() / f"{task_id}.sent").touch()
-
-
-def _save_prompt(task_id: str, prompt: str) -> None:
-    try:
-        (_get_log_dir() / f"{task_id}.prompt").write_text(prompt, encoding='utf-8')
-    except Exception:
-        pass
-
-
-def _load_prompt(task_id: str, truncate: bool = True) -> Optional[str]:
-    try:
-        f = _get_log_dir() / f"{task_id}.prompt"
-        if f.exists():
-            prompt = f.read_text(encoding='utf-8').strip()
-            return prompt[:20] + "..." if truncate and len(prompt) > 20 else prompt
-    except Exception:
-        pass
-    return None
-
-
-def _increment_query_count(task_id: str) -> int:
-    f = _get_log_dir() / f"{task_id}.count"
-    count = int(f.read_text().strip()) + 1 if f.exists() else 1
-    f.write_text(str(count))
-    return count
 
 
 def to_view_url(url: str) -> str:
@@ -250,20 +200,16 @@ def parse_args():
         epilog="""
 示例:
   # 文生视频
-  python generation_api.py --prompt "相机缓缓推进" --model grok --duration 6 --no-wait --json
+  python generation_api.py --prompt "相机缓缓推进" --model grok --duration 6
 
   # 图生视频（首帧 asset_id）
-  python generation_api.py --prompt "人物转身" --start-frame "asset_id:lkllv0yv81" --no-wait --json
-
-  # 图生视频（首帧 URL）
-  python generation_api.py --prompt "风景运动" --start-frame "url:https://example.com/img.jpg" --no-wait --json
+  python generation_api.py --prompt "人物转身" --start-frame "asset_id:lkllv0yv81"
 
   # 查询任务
-  python generation_api.py --query --task-id xxx --poll
+  python generation_api.py --query --task-id xxx
         """
     )
     parser.add_argument('--query', action='store_true', help='查询任务')
-    parser.add_argument('--poll', action='store_true', help='轮询等待完成')
     parser.add_argument('--prompt', type=str, help='视频描述')
     parser.add_argument('--api-key', type=str, help='API 密钥')
     parser.add_argument('--task-id', type=str, help='任务 ID')
@@ -279,32 +225,20 @@ def parse_args():
                         choices=list(SUPPORTED_ASPECT_RATIOS))
     parser.add_argument('--resolution', type=str, default='720p',
                         choices=list(SUPPORTED_RESOLUTIONS))
-    parser.add_argument('--no-wait', action='store_true', help='异步提交')
-    parser.add_argument('--max-wait', type=int, default=300)
-    parser.add_argument('--poll-interval', type=int, default=10)
-    parser.add_argument('--json', action='store_true', help='JSON 输出')
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
-    if DOTENV_AVAILABLE:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        if openclaw_env.exists():
-            load_dotenv(openclaw_env, override=True)
-
     api_key = args.api_key or os.getenv("GIGGLE_API_KEY")
     if not api_key:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        print("错误: 未找到 GIGGLE_API_KEY，请任选一种方式配置：", file=sys.stderr)
-        print(f"  1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）", file=sys.stderr)
-        print("  2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
+        print("错误: 未找到 GIGGLE_API_KEY，请设置系统环境变量：", file=sys.stderr)
+        print("  export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
         print("  API Key 可在 https://giggle.pro/ 账号设置中获取。", file=sys.stderr)
         sys.exit(1)
 
     client = GenerationAPI(api_key)
-    task_id = None
 
     try:
         if args.query:
@@ -312,61 +246,20 @@ def main():
                 print("错误: --query 需提供 --task-id", file=sys.stderr)
                 sys.exit(1)
 
-            if args.poll:
-                print(f"同步轮询（最多 {args.max_wait} 秒）...", file=sys.stderr)
-                start = time.time()
-                while time.time() - start < args.max_wait:
-                    if _check_sent(args.task_id):
-                        print("已由 Cron 推送，跳过", file=sys.stderr)
-                        sys.exit(0)
-                    try:
-                        result = client.query_task(args.task_id)
-                    except Exception as e:
-                        print(f"查询异常: {e}", file=sys.stderr)
-                        time.sleep(args.poll_interval)
-                        continue
-                    data = result.get("data", {})
-                    status = data.get("status", "")
-                    if status == TaskStatus.COMPLETED.value:
-                        break
-                    elif status in ("failed", "error"):
-                        break
-                    print(f"状态: {status}，继续等待...", file=sys.stderr)
-                    time.sleep(args.poll_interval)
-                else:
-                    print("同步等待超时，交给 Cron", file=sys.stderr)
-                    sys.exit(0)
-            else:
-                count = _increment_query_count(args.task_id)
-                if count > 10:
-                    prompt_text = _load_prompt(args.task_id) or "视频"
-                    print(f"视频生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟。\n\n建议重新生成，我随时待命~")
-                    sys.exit(0)
-                try:
-                    result = client.query_task(args.task_id)
-                except Exception as e:
-                    print(json.dumps({"status": "network_error", "task_id": args.task_id}, ensure_ascii=False))
-                    print(f"网络异常: {e}", file=sys.stderr)
-                    sys.exit(0)
-
+            result = client.query_task(args.task_id)
             data = result.get("data", {})
             status = data.get("status", "")
 
             if status == TaskStatus.COMPLETED.value:
-                if _check_sent(args.task_id):
-                    sys.exit(0)
                 video_urls = client.extract_video_urls(result)
                 if not video_urls:
-                    prompt_text = _load_prompt(args.task_id) or "视频"
-                    print(f"生成遇到了问题\n\n关于「{prompt_text}」的创作虽已完成但未返回视频。\n\n建议重新生成，我随时待命~")
+                    print("生成遇到了问题：创作虽已完成但未返回视频。建议重新生成。")
                     sys.exit(0)
-                _mark_sent(args.task_id)
                 view_urls = [to_view_url(u) for u in video_urls]
-                prompt_text = _load_prompt(args.task_id) or "视频"
                 n = len(view_urls)
                 lines = [f"[查看视频 {i+1}]({u})" for i, u in enumerate(view_urls)]
                 print("视频已就绪！🎬\n")
-                print(f"关于「{prompt_text}」的创作已完成" + (f"，共 {n} 个" if n > 1 else "") + " 🎬\n")
+                print(f"共 {n} 个视频 ✨\n")
                 print("\n".join(lines))
                 print("\n⚠️ 以上链接为签名 URL（含 Policy、Key-Pair-Id、Signature），有效期有限，请及时查看或下载。")
                 print("\n如需调整，随时告诉我~")
@@ -375,8 +268,7 @@ def main():
                 err_msg = data.get("err_msg", "未知错误")
                 if "sensitive" in str(err_msg).lower():
                     err_msg = "输入内容可能包含敏感信息，被服务端拦截"
-                prompt_text = _load_prompt(args.task_id) or "视频"
-                print(f"生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{err_msg}\n\n建议调整描述后重新尝试，我随时待命~")
+                print(f"生成遇到了问题：{err_msg}\n\n建议调整描述后重新尝试。")
                 sys.exit(0)
             else:
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
@@ -415,40 +307,7 @@ def main():
 
         task_id = result.get("data", {}).get("task_id")
         print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
-
-        if not args.no_wait:
-            print(f"等待完成（最多 {args.max_wait} 秒）...", file=sys.stderr)
-            start = time.time()
-            while time.time() - start < args.max_wait:
-                result = client.query_task(task_id)
-                data = result.get("data", {})
-                st = data.get("status", "")
-                if st == TaskStatus.COMPLETED.value:
-                    break
-                if st in ("failed", "error"):
-                    raise Exception(data.get("err_msg", "生成失败"))
-                time.sleep(args.poll_interval)
-            else:
-                raise Exception(f"等待超时 ({args.max_wait}秒)")
-            video_urls = client.extract_video_urls(result)
-            view_urls = [to_view_url(u) for u in video_urls]
-            if args.json:
-                display = "\n".join([f"[查看视频 {i+1}]({u})" for i, u in enumerate(view_urls)])
-                out = {"prompt": args.prompt, "display": display, "videoCount": len(video_urls)}
-                print(json.dumps(out, ensure_ascii=False, indent=2))
-            else:
-                print("\n" + "=" * 60)
-                print("视频生成完成")
-                print("=" * 60)
-                print(f"提示词: {args.prompt}")
-                for i, (v, d) in enumerate(zip(view_urls, video_urls), 1):
-                    print(f"视频 #{i} 查看: {v}")
-                    print(f"视频 #{i} 下载: {d}")
-                print("=" * 60)
-                print("⚠️ 以上链接为签名 URL，有效期有限，请及时查看或下载。")
-        else:
-            _save_prompt(task_id, args.prompt)
-            print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
+        print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
     except Exception as e:
         print(f"✗ 错误: {e}", file=sys.stderr)

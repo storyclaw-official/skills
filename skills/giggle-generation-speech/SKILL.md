@@ -1,13 +1,27 @@
 ---
 name: giggle-generation-speech
 description: Use when the user wants to generate speech, voiceover, or text-to-audio. Converts text to AI voice via Giggle.pro TTS API. Triggers: generate speech, text-to-speech, TTS, voiceover, read this text aloud, synthesize speech.
+version: "0.0.1"
+license: MIT
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
     "openclaw":
       {
         "emoji": "🔊",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
+        "requires": {
+          "bins": ["python3"],
+          "env": ["GIGGLE_API_KEY"],
+          "pip": ["requests"]
+        },
         "primaryEnv": "GIGGLE_API_KEY",
+        "runtimeBehaviors": {
+          "writes": ["~/.openclaw/skills/giggle-generation-speech/logs/"],
+          "cron": "Registers polling job (30s interval) when user initiates speech generation"
+        }
       },
   }
 ---
@@ -18,7 +32,19 @@ metadata:
 
 Synthesizes text into AI voice/voiceover via giggle.pro. Supports multiple voice tones, emotions, and speaking rates.
 
-**API Key**: Load priority 1) `~/.openclaw/.env` (preferred) 2) System environment variable `GIGGLE_API_KEY`. The script will prompt if not configured.
+## ⚠️ Review Before Installing
+
+**Please review the following before installing.** This skill will:
+
+1. **Write** to `~/.openclaw/skills/giggle-generation-speech/logs/` – Task state files for Cron deduplication
+2. **Register Cron** (30s interval) – Async polling when user initiates speech generation; removed when complete
+3. **Forward raw stdout** – Script output (audio links, status) is passed to the user as-is
+
+**Requirements**: `python3`, `GIGGLE_API_KEY` (system environment variable), pip packages: `requests`
+
+---
+
+**API Key**: Set system environment variable `GIGGLE_API_KEY`. The script will prompt if not configured.
 
 > **No inline Python**: All commands must be executed via the `exec` tool. **Never** use heredoc inline code.
 
@@ -26,7 +52,7 @@ Synthesizes text into AI voice/voiceover via giggle.pro. Supports multiple voice
 
 Speech generation typically takes 10–30 seconds. Uses "fast submit + Cron poll + sync fallback" three-phase architecture.
 
-> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API Key is read from `~/.openclaw/.env` or system environment.
+> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API Key is read from system environment variable.
 
 ---
 

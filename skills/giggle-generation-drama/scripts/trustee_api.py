@@ -33,14 +33,11 @@ class TrusteeModeAPI:
         初始化API客户端
         """
         requests = _check_requests()  # 延迟导入
-        self._load_env()
         self.api_key = os.getenv("GIGGLE_API_KEY")
         if not self.api_key:
-            openclaw_env = Path.home() / ".openclaw" / ".env"
             raise ValueError(
-                "未找到 GIGGLE_API_KEY，请任选一种方式配置：\n"
-                f"1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）\n"
-                "2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key\n"
+                "未找到 GIGGLE_API_KEY，请设置系统环境变量：\n"
+                "export GIGGLE_API_KEY=your_api_key\n"
                 "API Key 可在 [Giggle.pro](https://giggle.pro/) 账号设置中获取。"
             )
         self.base_url = "https://giggle.pro"
@@ -50,16 +47,6 @@ class TrusteeModeAPI:
             'x-auth': self.api_key
         })
 
-    def _load_env(self):
-        """加载环境变量，优先级：1) ~/.openclaw/.env  2) 系统环境变量 GIGGLE_API_KEY"""
-        try:
-            from dotenv import load_dotenv
-            openclaw_env = Path.home() / ".openclaw" / ".env"
-            if openclaw_env.exists():
-                load_dotenv(openclaw_env, override=True)
-        except ImportError:
-            pass
-    
     def _create_project(self, name: str, project_type: str, aspect: str, mode: str = "trustee") -> Dict[str, Any]:
         """
         创建项目（仅供内部调用，不对外暴露 CLI）

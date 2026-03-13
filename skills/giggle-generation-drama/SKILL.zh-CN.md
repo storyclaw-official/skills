@@ -1,36 +1,52 @@
 ---
 name: giggle-generation-drama
 description: 当用户希望生成视频、拍摄短片或查看可用视频风格时使用此技能。触发词：短片、制作视频、拍短片、AI视频、根据故事生成视频、拍视频、我有故事想法、短剧、解说视频、电影感视频、有哪些视频风格。
-version: "0.0.1"
+version: "0.0.2"
 license: MIT
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
     "openclaw":
       {
         "emoji": "📂",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
-        "primaryEnv": "GIGGLE_API_KEY",
+        "requires": {
+          "bins": ["python3"],
+          "env": ["GIGGLE_API_KEY"],
+          "pip": ["requests"]
+        },
+        "primaryEnv": "GIGGLE_API_KEY"
       },
   }
 ---
 
 简体中文 | [English](./SKILL.md)
 
+## ⚠️ 安装前请阅读
+
+**安装前请确认以下内容。** 本技能将：
+
+1. **网络请求** – 调用 Giggle.pro API 生成视频
+
+**依赖要求**：`python3`、`GIGGLE_API_KEY`（系统环境变量）、pip 包：`requests`
+
+---
+
 ## 首次使用前的配置（必选）
 
 在执行任何操作前，确认用户已配置 API Key，以免工作流因认证失败而中断。
 
 - **API Key**：登录 [Giggle.pro](https://giggle.pro/) 并在账号设置中获取 API Key。
-- **加载优先级**：1) `~/.openclaw/.env`（优先） 2) 系统环境变量 `GIGGLE_API_KEY`
-- **配置方式（任选其一）**：
-  1. **~/.openclaw/.env**（推荐）：创建 `~/.openclaw/.env`，添加 `GIGGLE_API_KEY=your_api_key`
-  2. **系统环境变量**：`export GIGGLE_API_KEY=your_api_key`
+- **配置方式**：设置系统环境变量 `GIGGLE_API_KEY`
+  - `export GIGGLE_API_KEY=your_api_key`
 
 **检查步骤**：
 
-1. 确认用户已在 `~/.openclaw/.env` 或系统环境变量中配置 `GIGGLE_API_KEY`。
+1. 确认用户已在系统环境变量中配置 `GIGGLE_API_KEY`。
 2. 若未配置，**引导用户**：
-   > 你好！在使用视频生成功能前，需要先配置 API Key。请前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，然后任选一种方式：在 `~/.openclaw/.env` 中添加 `GIGGLE_API_KEY=your_api_key`，或在终端执行 `export GIGGLE_API_KEY=your_api_key`。
+   > 你好！在使用视频生成功能前，需要先配置 API Key。请前往 [Giggle.pro](https://giggle.pro/) 获取 API Key，然后在终端执行 `export GIGGLE_API_KEY=your_api_key`。
 3. 等待用户配置后再继续工作流。
 
 ## 生成模式

@@ -1,15 +1,23 @@
 ---
 name: giggle-generation-aimv
 description: Use when the user wants to create AI music videos (MV)—including generating music from text prompts or using custom lyrics. Triggers: generate MV, music video, make video for this song, lyrics video, create MV, AI music video, music+video, generate video from lyrics.
-version: "0.0.1"
+version: "0.0.2"
 license: MIT
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
     "openclaw":
       {
         "emoji": "📂",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
-        "primaryEnv": "GIGGLE_API_KEY",
+        "requires": {
+          "bins": ["python3"],
+          "env": ["GIGGLE_API_KEY"],
+          "pip": ["requests"]
+        },
+        "primaryEnv": "GIGGLE_API_KEY"
       },
   }
 ---
@@ -20,22 +28,29 @@ metadata:
 
 Calls the MV trustee mode API to run the full MV generation workflow. **Project creation and task submission are merged into one step in the script**—call `execute_workflow` once only; never call create and submit separately.
 
+## ⚠️ Review Before Installing
+
+**Please review before installing.** This skill will:
+
+1. **Network** – Calls Giggle.pro API for MV generation
+
+**Requirements**: `python3`, `GIGGLE_API_KEY` (system environment variable), pip packages: `requests`
+
+---
+
 ## Required Setup Before First Use
 
 **Before performing any operation, confirm the user has configured the API Key.**
 
 **API Key**: Log in to [Giggle.pro](https://giggle.pro/) and obtain the API Key from account settings.
 
-**Load priority**: 1) `~/.openclaw/.env` (preferred) 2) System environment variable `GIGGLE_API_KEY`
-
-Configuration (choose one):
-1. **~/.openclaw/.env** (recommended): Create `~/.openclaw/.env`, add `GIGGLE_API_KEY=your_api_key`
-2. **System environment variable**: `export GIGGLE_API_KEY=your_api_key`
+**Configuration**: Set system environment variable `GIGGLE_API_KEY`
+- `export GIGGLE_API_KEY=your_api_key`
 
 **Verification steps**:
-1. Confirm the user has configured `GIGGLE_API_KEY` in `~/.openclaw/.env` or system environment
+1. Confirm the user has configured `GIGGLE_API_KEY` in system environment
 2. If not configured, **guide the user**:
-   > Hello! Before using the MV generation feature, you need to configure the API Key. Please go to [Giggle.pro](https://giggle.pro/) to get your API Key, then either add `GIGGLE_API_KEY=your_api_key` to `~/.openclaw/.env` or run `export GIGGLE_API_KEY=your_api_key` in the terminal.
+   > Hello! Before using the MV generation feature, you need to configure the API Key. Please go to [Giggle.pro](https://giggle.pro/) to get your API Key, then run `export GIGGLE_API_KEY=your_api_key` in the terminal.
 3. Wait for the user to configure before continuing the workflow
 
 ## Three Music Generation Modes

@@ -8,24 +8,13 @@ giggle.pro 平台 AI 音乐生成 API 封装脚本
 
 import os
 import sys
-import time
 import json
 import argparse
 import warnings
 warnings.filterwarnings("ignore")  # 抑制 LibreSSL/urllib3 等运行时警告
 import requests
-from pathlib import Path
-from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
-
-# 尝试导入 dotenv，如果不存在则忽略
-try:
-    from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
-
 
 class VocalGender(str, Enum):
     """人声性别枚举"""
@@ -121,37 +110,6 @@ class GiggleMusicAPI:
         except requests.exceptions.RequestException as e:
             raise Exception(f"查询失败: {str(e)}")
 
-    def wait_for_completion(
-        self,
-        task_id: str,
-        max_wait_time: int = 300,
-        poll_interval: int = 5
-    ) -> Dict[str, Any]:
-        """轮询等待任务完成"""
-        start_time = time.time()
-        last_logged_status = ""
-
-        while time.time() - start_time < max_wait_time:
-            result = self.query_task(task_id)
-            data = result.get("data", {})
-            status = data.get("status")
-
-            # 仅在状态变化时打印，避免重复日志
-            if status != last_logged_status:
-                print(f"任务状态: {status}", file=sys.stderr)
-                last_logged_status = status
-
-            if status == TaskStatus.COMPLETED.value:
-                print("✓ 任务完成!", file=sys.stderr)
-                return result
-            elif status == TaskStatus.FAILED.value:
-                error_msg = data.get("err_msg", "未知错误")
-                raise Exception(f"任务失败: {error_msg}")
-
-            time.sleep(poll_interval)
-
-        raise Exception(f"等待超时 ({max_wait_time}秒)")
-
     def extract_audio_urls(self, task_result: Dict[str, Any]) -> List[Dict[str, str]]:
         """从任务结果中提取音频 URL 列表"""
         data = task_result.get("data", {})
@@ -172,111 +130,14 @@ class GiggleMusicAPI:
         return audio_list
 
 
-def _get_music_log_dir() -> Path:
-    """获取 giggle-music 日志目录"""
-    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-music' / 'logs'
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir
-
-
-def _setup_music_log(task_id: str) -> Path:
-    """创建任务日志文件，返回路径"""
-    from datetime import datetime as _dt
-    log_dir = _get_music_log_dir()
-    log_file = log_dir / f"{task_id}_{_dt.now().strftime('%Y%m%d_%H%M%S')}.log"
-    log_file.touch()
-    return log_file
-
-
-def _check_music_sent(task_id: str) -> bool:
-    """检查是否已推送过结果（.sent 防重复）"""
-    sent_file = _get_music_log_dir() / f"{task_id}.sent"
-    return sent_file.exists()
-
-
-def _mark_music_sent(task_id: str) -> None:
-    """标记已推送结果"""
-    sent_file = _get_music_log_dir() / f"{task_id}.sent"
-    sent_file.touch()
-
-
-def _save_music_prompt(task_id: str, prompt: str) -> None:
-    """保存任务提示词，供 --query 模式读取并展示给用户"""
-    try:
-        (_get_music_log_dir() / f"{task_id}.prompt").write_text(prompt, encoding='utf-8')
-    except Exception:
-        pass
-
-
-def _load_music_prompt(task_id: str) -> Optional[str]:
-    """读取任务提示词（截断到20字）"""
-    try:
-        prompt_file = _get_music_log_dir() / f"{task_id}.prompt"
-        if prompt_file.exists():
-            prompt = prompt_file.read_text(encoding='utf-8').strip()
-            return prompt[:20] + "..." if len(prompt) > 20 else prompt
-    except Exception:
-        pass
-    return None
-
-
-def _get_query_count(task_id: str) -> int:
-    """获取 --query 轮询次数"""
-    f = _get_music_log_dir() / f"{task_id}.count"
-    try:
-        return int(f.read_text().strip()) if f.exists() else 0
-    except Exception:
-        return 0
-
-
-def _increment_query_count(task_id: str) -> int:
-    """递增并返回 --query 轮询次数"""
-    f = _get_music_log_dir() / f"{task_id}.count"
-    count = _get_query_count(task_id) + 1
-    f.write_text(str(count))
-    return count
-
-
-def _write_music_log(task_id: str, prompt: str, status: str, submitted_at: str,
-                     audio_list: Optional[List[Dict[str, str]]] = None, error_msg: Optional[str] = None) -> None:
-    """写入任务日志文件（JSON格式）"""
-    log_dir = _get_music_log_dir()
-    safe_ts = submitted_at.replace(' ', '_').replace(':', '').replace('-', '')
-    log_file = log_dir / f"{task_id}_{safe_ts}.log"
-    log_data: Dict[str, Any] = {
-        "task_id": task_id,
-        "prompt": prompt,
-        "status": status,
-        "submitted_at": submitted_at,
-        "completed_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-    }
-    if audio_list is not None:
-        log_data["audio_urls"] = [a.get("audioUrl", "") for a in audio_list]
-    if error_msg is not None:
-        log_data["error"] = error_msg
-    try:
-        with open(log_file, 'w', encoding='utf-8') as f:
-            json.dump(log_data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
 def load_api_key() -> str:
-    """加载 API 密钥，优先级：1) ~/.openclaw/.env  2) 系统环境变量 GIGGLE_API_KEY"""
-    if DOTENV_AVAILABLE:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        if openclaw_env.exists():
-            load_dotenv(openclaw_env, override=True)
-
+    """加载 API 密钥，从系统环境变量 GIGGLE_API_KEY 读取"""
     api_key = os.getenv("GIGGLE_API_KEY")
     if not api_key:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        print("错误: 未找到 GIGGLE_API_KEY，请任选一种方式配置：", file=sys.stderr)
-        print(f"  1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）", file=sys.stderr)
-        print("  2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
+        print("错误: 未找到 GIGGLE_API_KEY，请设置系统环境变量：", file=sys.stderr)
+        print("  export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
         print("  API Key 可在 https://giggle.pro/ 账号设置中获取。", file=sys.stderr)
         sys.exit(1)
-
     return api_key
 
 
@@ -313,30 +174,7 @@ def parse_args():
     parser.add_argument('--vocal-gender', type=str, choices=['male', 'female'],
                        help='人声性别偏好（仅自定义模式）')
 
-    # 轮询参数
-    parser.add_argument('--no-wait', action='store_true', help='不等待任务完成')
-    parser.add_argument('--max-wait', type=int, default=300, help='最大等待秒数（默认300）')
-    parser.add_argument('--poll-interval', type=int, default=10, help='轮询间隔秒数（默认10）')
-
-    # 输出参数
-    parser.add_argument('--json', action='store_true', help='JSON格式输出')
-
     return parser.parse_args()
-
-
-def print_output(audio_list: List[Dict[str, Any]], output_json: bool = False):
-    """输出结果到 stdout"""
-    output_data = [{"title": a.get("title", ""), "audioUrl": a.get("audioUrl", "")} for a in audio_list]
-
-    if output_json:
-        print(json.dumps(output_data, ensure_ascii=False, indent=2))
-    else:
-        for i, item in enumerate(output_data, 1):
-            print(f"\n{'=' * 60}")
-            print(f"音乐 #{i}")
-            print(f"{'=' * 60}")
-            print(f"音乐标题: {item['title']}")
-            print(f"下载链接: {item['audioUrl']}")
 
 
 def main():
@@ -345,10 +183,6 @@ def main():
     api_key = load_api_key()
     client = GiggleMusicAPI(api_key)
 
-    # 同步模式状态跟踪（用于异常处理时写日志）
-    task_id = None
-    submitted_at = None
-
     try:
         # 查询模式
         if args.query:
@@ -356,38 +190,22 @@ def main():
                 print("错误: 查询模式需要提供 --task-id 参数", file=sys.stderr)
                 sys.exit(1)
 
-            # 超时兜底：最多轮询 5 次（约 10 分钟），超时输出纯文本触发 Cron 取消
-            count = _increment_query_count(args.task_id)
-            if count > 5:
-                prompt_text = _load_music_prompt(args.task_id) or "音乐"
-                print(f"⏰ 音乐生成超时\n\n关于「{prompt_text}」的创作已等待超过 10 分钟，未能完成。\n\n💡 建议重新生成，我随时待命~")
-                sys.exit(0)
-
             result = client.query_task(args.task_id)
             data = result.get("data", {})
             status = data.get("status")
 
             if status == TaskStatus.COMPLETED.value:
-                # 防重复：已推送过则空输出 exit(0)，agent 无内容可报告，cron 应静默取消
-                if _check_music_sent(args.task_id):
-                    sys.exit(0)
                 audio_list = client.extract_audio_urls(result)
-                _mark_music_sent(args.task_id)
-                prompt_text = _load_music_prompt(args.task_id) or "音乐"
                 count_songs = len(audio_list)
                 lines = [f"🎵 [{a['title']}]({a['audioUrl']})" for a in audio_list]
-                print(f"🎶 音乐已就绪！\n\n关于「{prompt_text}」的创作已完成，共 {count_songs} 首 ✨\n")
+                print(f"🎶 音乐已就绪！\n\n共 {count_songs} 首 ✨\n")
                 print("\n".join(lines))
                 print("\n如需调整，随时告诉我~")
                 sys.exit(0)
             elif status == TaskStatus.FAILED.value:
-                # 纯文本输出，exit(0) 避免 exec failed 通知，Cron 判断非 JSON → 取消
-                prompt_text = _load_music_prompt(args.task_id) or "音乐"
-                print(f"😔 音乐生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{data.get('err_msg', '未知错误')}\n\n💡 建议调整描述后重新尝试，我随时待命~")
+                print(f"😔 音乐生成遇到了问题：{data.get('err_msg', '未知错误')}\n\n💡 建议调整描述后重新尝试。")
                 sys.exit(0)
             else:
-                # 进行中（processing/pending）→ JSON 输出，exit(0) 避免 exec failed 通知
-                # Cron 判断是 JSON → 不发消息，继续等待
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
                 sys.exit(0)
 
@@ -416,26 +234,8 @@ def main():
 
             result = client.custom_generate(**kwargs)
             task_id = result.get("data", {}).get("task_id")
-            submitted_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
-
-            if not args.no_wait:
-                print(f"等待任务完成（最多{args.max_wait}秒）...", file=sys.stderr)
-                final_result = client.wait_for_completion(
-                    task_id=task_id,
-                    max_wait_time=args.max_wait,
-                    poll_interval=args.poll_interval
-                )
-                audio_list = client.extract_audio_urls(final_result)
-                print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
-                print_output(audio_list, args.json)
-                # 写入任务日志
-                _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
-            else:
-                # 保存 prompt 供 --query 时展示，输出到 stdout，exec 可读取 task_id
-                _save_music_prompt(task_id, args.prompt or '')
-                log_file = _setup_music_log(task_id)
-                print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
+            print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
         # 简化模式（默认）
         else:
@@ -451,48 +251,10 @@ def main():
             )
 
             task_id = result.get("data", {}).get("task_id")
-            submitted_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
-
-            if not args.no_wait:
-                print(f"等待任务完成（最多{args.max_wait}秒）...", file=sys.stderr)
-                final_result = client.wait_for_completion(
-                    task_id=task_id,
-                    max_wait_time=args.max_wait,
-                    poll_interval=args.poll_interval
-                )
-                audio_list = client.extract_audio_urls(final_result)
-                print(f"\n生成了 {len(audio_list)} 首音乐\n", file=sys.stderr)
-                print_output(audio_list, args.json)
-                # 写入任务日志
-                _write_music_log(task_id, args.prompt or '', "success", submitted_at, audio_list=audio_list)
-            else:
-                # 保存 prompt 供 --query 时展示，输出到 stdout，exec 可读取 task_id
-                _save_music_prompt(task_id, args.prompt or '')
-                log_file = _setup_music_log(task_id)
-                print(json.dumps({"status": "started", "task_id": task_id, "log_file": str(log_file)}, ensure_ascii=False))
+            print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
     except Exception as e:
-        err = str(e)
-        # 仅在同步生成模式下输出 JSON 到 stdout（方便 agent 读取错误类型）
-        if not args.query and not args.no_wait:
-            prompt = args.prompt or ''
-            if "超时" in err or "timeout" in err.lower():
-                print(json.dumps({
-                    "status": "timeout",
-                    "prompt": prompt,
-                    "message": f"音乐生成超时（{args.max_wait}秒），请重新生成"
-                }, ensure_ascii=False))
-                if task_id and submitted_at:
-                    _write_music_log(task_id, prompt, "timeout", submitted_at, error_msg=err)
-            else:
-                print(json.dumps({
-                    "status": "error",
-                    "prompt": prompt,
-                    "message": err
-                }, ensure_ascii=False))
-                if task_id and submitted_at:
-                    _write_music_log(task_id, prompt, "error", submitted_at, error_msg=err)
         print(f"✗ 错误: {e}", file=sys.stderr)
         sys.exit(1)
 

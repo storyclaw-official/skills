@@ -1,16 +1,25 @@
 ---
 name: giggle-generation-image
 description: Supports text-to-image and image-to-image. Use when the user needs to create or generate images. Use cases: (1) Generate from text description, (2) Use reference images, (3) Customize model, aspect ratio, resolution. Triggers: generate image, draw, create image, AI art.
-version: "0.0.2"
+version: "0.0.9"
 license: MIT
+author: storyclaw-official
+homepage: https://github.com/storyclaw-official/storyclaw-skills
+requires:
+  bins: [python3]
+  env: [GIGGLE_API_KEY]
+  pip: [requests]
 metadata:
   {
-    "openclaw":
-      {
-        "emoji": "📂",
-        "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
-        "primaryEnv": "GIGGLE_API_KEY",
+    "openclaw": {
+      "emoji": "📂",
+      "requires": {
+        "bins": ["python3"],
+        "env": ["GIGGLE_API_KEY"],
+        "pip": ["requests"]
       },
+      "primaryEnv": "GIGGLE_API_KEY"
+    }
   }
 ---
 
@@ -18,9 +27,11 @@ metadata:
 
 # Giggle Image Generation (Multi-Model)
 
-Generates AI images via giggle.pro's Generation API. Supports multiple models.
+**Source**: [storyclaw-official/storyclaw-skills](https://github.com/storyclaw-official/storyclaw-skills) · API: [giggle.pro](https://giggle.pro/)
 
-**API Key**: Load priority 1) `~/.openclaw/.env` (preferred) 2) System environment variable `GIGGLE_API_KEY`. The script will prompt if not configured.
+Generates AI images via giggle.pro's Generation API. Supports multiple models (Seedream, Midjourney, Nano Banana). Submit task → query when ready. No polling or Cron.
+
+**API Key**: Set system environment variable `GIGGLE_API_KEY`. The script will prompt if not configured.
 
 > **No inline Python**: All commands must be executed via the `exec` tool. **Never** use `python3 << 'EOF'` or heredoc inline code.
 
@@ -35,17 +46,15 @@ Generates AI images via giggle.pro's Generation API. Supports multiple models.
 
 ---
 
-## Execution Flow (Three-Phase Dual-Path)
+## Execution Flow: Submit and Query
 
-Image generation typically takes 30–120 seconds. Uses "fast submit + Cron poll + sync fallback" three-phase architecture.
+Image generation is asynchronous (typically 30–120 seconds). **Submit** a task to get `task_id`, then **query** when the user wants to check status.
 
-> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API Key is read from `~/.openclaw/.env` or system environment.
+> **Important**: **Never** pass `GIGGLE_API_KEY` in exec's `env` parameter. API Key is read from system environment variable.
 
 ---
 
-### Phase 1: Submit Task (exec completes in ~10 seconds)
-
-**First send a message to the user**: "Image generation in progress, usually takes 30–120 seconds. Results will be sent automatically."
+### Step 1: Submit Task
 
 ```bash
 # Text-to-image (default seedream45)
@@ -78,66 +87,33 @@ Response example:
 {"status": "started", "task_id": "xxx"}
 ```
 
-**Immediately store task_id in memory** (`addMemory`):
+**Store task_id in memory** (`addMemory`):
 ```
 giggle-generation-image task_id: xxx (submitted: YYYY-MM-DD HH:mm)
 ```
 
----
-
-### Phase 2: Register Cron (45 second interval)
-
-Use the `cron` tool to register the polling job. **Strictly follow the parameter format**:
-
-```json
-{
-  "action": "add",
-  "job": {
-    "name": "giggle-generation-image-<first 8 chars of task_id>",
-    "schedule": {
-      "kind": "every",
-      "everyMs": 45000
-    },
-    "payload": {
-      "kind": "systemEvent",
-      "text": "Image task poll: exec python3 scripts/generation_api.py --query --task-id <full task_id>, handle stdout per Cron logic. If stdout is non-JSON plain text, forward to user and remove Cron. If stdout is JSON, do not send message, keep waiting. If stdout is empty, remove Cron immediately."
-    },
-    "sessionTarget": "main"
-  }
-}
-```
-
-**Cron trigger handling** (based on exec stdout):
-
-| stdout pattern | Action |
-|----------------|--------|
-| Non-empty plain text (not starting with `{`) | **Forward to user as-is**, **remove Cron** |
-| stdout empty | Already pushed, **remove Cron immediately, do not send message** |
-| JSON (starts with `{`, has `"status"` field) | Do not send message, do not remove Cron, keep waiting |
+**Tell the user**: "Image generation started. It usually takes 30–120 seconds. You can ask me 'is it ready?' to check the status."
 
 ---
 
-### Phase 3: Sync Wait (optimistic path, fallback when Cron hasn't fired)
-
-**Execute this step whether or not Cron registration succeeded.**
+### Step 2: Query Task (when user asks for status)
 
 ```bash
-python3 scripts/generation_api.py --query --task-id <task_id> --poll --max-wait 180
+python3 scripts/generation_api.py --query --task-id <task_id>
 ```
 
-**Handling logic**:
-
-- Returns plain text (image ready/failed message) → **Forward to user as-is**, remove Cron
-- stdout empty → Cron already pushed, remove Cron, do not send message
-- exec timeout → Cron continues polling
+**Behavior**:
+- **completed**: Output image links for user
+- **failed/error**: Output error message
+- **processing/pending**: Output JSON `{"status": "...", "task_id": "xxx"}`; user can query again later
 
 ---
 
 ## New Request vs Query Old Task
 
-**When the user initiates a new image generation request**, **must run Phase 1 to submit a new task**. Do not reuse old task_id from memory.
+**When the user initiates a new image generation request**, run submit to create a new task. Do not reuse old task_id from memory.
 
-**Only when the user explicitly asks about a previous task's progress** should you query the old task_id from memory.
+**When the user asks about a previous task's progress** (e.g. "is it ready?", "check status"), query the task_id from memory.
 
 ---
 
@@ -259,8 +235,6 @@ multiSelect: false
 
 ### Step 4: Execute and Display
 
-Follow the execution flow: send message → Phase 1 submit → Phase 2 register Cron → Phase 3 sync wait.
-
-When results arrive, forward exec stdout to the user as-is.
+Submit task → store task_id → inform user. When user asks for status, run query and forward stdout to user.
 
 **Link return rule**: Image links in results must be **full signed URLs** (with Policy, Key-Pair-Id, Signature query params). Correct: `https://assets.giggle.pro/...?Policy=...&Key-Pair-Id=...&Signature=...`. Wrong: do not return unsigned URLs with only the base path (no query params).

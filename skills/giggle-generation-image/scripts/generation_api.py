@@ -10,7 +10,6 @@ import base64
 import os
 import re
 import sys
-import time
 import json
 import argparse
 import requests
@@ -18,13 +17,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
-
-try:
-    from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
-
 
 class AspectRatio(str, Enum):
     """图像比例枚举"""
@@ -47,46 +39,6 @@ class TaskStatus(str, Enum):
 
 
 SUPPORTED_MODELS = ("seedream45", "midjourney", "nano-banana-2", "nano-banana-2-fast")
-
-
-# ── 防重复推送（.sent 文件标记）────────────────────────────────────────────────
-def _get_log_dir() -> Path:
-    log_dir = Path.home() / '.openclaw' / 'skills' / 'giggle-generation-image' / 'logs'
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir
-
-
-def _check_sent(task_id: str) -> bool:
-    return (_get_log_dir() / f"{task_id}.sent").exists()
-
-
-def _mark_sent(task_id: str) -> None:
-    (_get_log_dir() / f"{task_id}.sent").touch()
-
-
-def _save_prompt(task_id: str, prompt: str) -> None:
-    try:
-        (_get_log_dir() / f"{task_id}.prompt").write_text(prompt, encoding='utf-8')
-    except Exception:
-        pass
-
-
-def _load_prompt(task_id: str, truncate: bool = True) -> Optional[str]:
-    try:
-        f = _get_log_dir() / f"{task_id}.prompt"
-        if f.exists():
-            prompt = f.read_text(encoding='utf-8').strip()
-            return prompt[:20] + "..." if truncate and len(prompt) > 20 else prompt
-    except Exception:
-        pass
-    return None
-
-
-def _increment_query_count(task_id: str) -> int:
-    f = _get_log_dir() / f"{task_id}.count"
-    count = int(f.read_text().strip()) + 1 if f.exists() else 1
-    f.write_text(str(count))
-    return count
 
 
 def to_view_url(url: str) -> str:
@@ -258,11 +210,10 @@ def parse_args():
   python generation_api.py --prompt "转为油画风格" --reference-images "https://example.com/photo.jpg" --no-wait --json
 
   # 查询任务
-  python generation_api.py --query --task-id xxx --poll
+  python generation_api.py --query --task-id xxx
         """
     )
     parser.add_argument('--query', action='store_true', help='查询任务')
-    parser.add_argument('--poll', action='store_true', help='轮询等待完成')
     parser.add_argument('--prompt', type=str, help='图像描述')
     parser.add_argument('--api-key', type=str, help='API 密钥')
     parser.add_argument('--task-id', type=str, help='任务 ID')
@@ -277,9 +228,7 @@ def parse_args():
     parser.add_argument('--watermark', action='store_true', help='添加水印')
     parser.add_argument('--download', action='store_true', help='下载到本地')
     parser.add_argument('--output-dir', type=str, default='~/Downloads')
-    parser.add_argument('--no-wait', action='store_true', help='异步提交')
-    parser.add_argument('--max-wait', type=int, default=300)
-    parser.add_argument('--poll-interval', type=int, default=5)
+    parser.add_argument('--no-wait', action='store_true', help='异步提交（默认）')
     parser.add_argument('--json', action='store_true', help='JSON 输出')
     return parser.parse_args()
 
@@ -287,23 +236,14 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if DOTENV_AVAILABLE:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        if openclaw_env.exists():
-            load_dotenv(openclaw_env, override=True)
-
     api_key = args.api_key or os.getenv("GIGGLE_API_KEY")
     if not api_key:
-        openclaw_env = Path.home() / ".openclaw" / ".env"
-        print("错误: 未找到 GIGGLE_API_KEY，请任选一种方式配置：", file=sys.stderr)
-        print(f"  1. 在 {openclaw_env} 中添加 GIGGLE_API_KEY=your_api_key（优先读取）", file=sys.stderr)
-        print("  2. 设置系统环境变量：export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
+        print("错误: 未找到 GIGGLE_API_KEY，请设置系统环境变量：", file=sys.stderr)
+        print("  export GIGGLE_API_KEY=your_api_key", file=sys.stderr)
         print("  API Key 可在 https://giggle.pro/ 账号设置中获取。", file=sys.stderr)
         sys.exit(1)
 
     client = GenerationAPI(api_key)
-    task_id = None
-    submitted_at = None
 
     try:
         if args.query:
@@ -311,61 +251,26 @@ def main():
                 print("错误: --query 需提供 --task-id", file=sys.stderr)
                 sys.exit(1)
 
-            if args.poll:
-                print(f"同步轮询（最多 {args.max_wait} 秒）...", file=sys.stderr)
-                start = time.time()
-                while time.time() - start < args.max_wait:
-                    if _check_sent(args.task_id):
-                        print("已由 Cron 推送，跳过", file=sys.stderr)
-                        sys.exit(0)
-                    try:
-                        result = client.query_task(args.task_id)
-                    except Exception as e:
-                        print(f"查询异常: {e}", file=sys.stderr)
-                        time.sleep(args.poll_interval)
-                        continue
-                    data = result.get("data", {})
-                    status = data.get("status", "")
-                    if status == TaskStatus.COMPLETED.value:
-                        break
-                    elif status in ("failed", "error"):
-                        break
-                    print(f"状态: {status}，继续等待...", file=sys.stderr)
-                    time.sleep(args.poll_interval)
-                else:
-                    print("同步等待超时，交给 Cron", file=sys.stderr)
-                    sys.exit(0)
-            else:
-                count = _increment_query_count(args.task_id)
-                if count > 10:
-                    prompt_text = _load_prompt(args.task_id) or "图片"
-                    print(f"图片生成超时\n\n关于「{prompt_text}」的创作已等待超过 5 分钟。\n\n建议重新生成，我随时待命~")
-                    sys.exit(0)
-                try:
-                    result = client.query_task(args.task_id)
-                except Exception as e:
-                    print(json.dumps({"status": "network_error", "task_id": args.task_id}, ensure_ascii=False))
-                    print(f"网络异常: {e}", file=sys.stderr)
-                    sys.exit(0)
+            try:
+                result = client.query_task(args.task_id)
+            except Exception as e:
+                print(json.dumps({"status": "network_error", "task_id": args.task_id}, ensure_ascii=False))
+                print(f"网络异常: {e}", file=sys.stderr)
+                sys.exit(0)
 
             data = result.get("data", {})
             status = data.get("status", "")
 
             if status == TaskStatus.COMPLETED.value:
-                if _check_sent(args.task_id):
-                    sys.exit(0)
                 image_urls = client.extract_image_urls(result)
                 if not image_urls:
-                    prompt_text = _load_prompt(args.task_id) or "图片"
-                    print(f"生成遇到了问题\n\n关于「{prompt_text}」的创作虽已完成但未返回图片。\n\n建议重新生成，我随时待命~")
+                    print("生成遇到了问题\n\n创作虽已完成但未返回图片。\n\n建议重新生成，我随时待命~")
                     sys.exit(0)
-                _mark_sent(args.task_id)
                 view_urls = [to_view_url(u) for u in image_urls]
-                prompt_text = _load_prompt(args.task_id) or "图片"
                 n = len(view_urls)
                 lines = [f"[查看图片 {i+1}]({u})" for i, u in enumerate(view_urls)]
                 print("图片已就绪！✨\n")
-                print(f"关于「{prompt_text}」的创作已完成" + (f"，共 {n} 张" if n > 1 else "") + " ✨\n")
+                print(f"创作已完成" + (f"，共 {n} 张" if n > 1 else "") + " ✨\n")
                 print("\n".join(lines))
                 print("\n如需调整，随时告诉我~")
                 sys.exit(0)
@@ -373,8 +278,7 @@ def main():
                 err_msg = data.get("err_msg", "未知错误")
                 if "sensitive" in str(err_msg).lower():
                     err_msg = "输入内容可能包含敏感信息，被服务端拦截"
-                prompt_text = _load_prompt(args.task_id) or "图片"
-                print(f"生成遇到了问题\n\n关于「{prompt_text}」的创作未能完成：{err_msg}\n\n建议调整描述后重新尝试，我随时待命~")
+                print(f"生成遇到了问题\n\n创作未能完成：{err_msg}\n\n建议调整描述后重新尝试，我随时待命~")
                 sys.exit(0)
             else:
                 print(json.dumps({"status": status, "task_id": args.task_id}, ensure_ascii=False))
@@ -407,46 +311,8 @@ def main():
             print("模式: 文生图", file=sys.stderr)
 
         task_id = result.get("data", {}).get("task_id")
-        submitted_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"✓ 任务创建成功! TaskID: {task_id}", file=sys.stderr)
-
-        if not args.no_wait:
-            print(f"等待完成（最多 {args.max_wait} 秒）...", file=sys.stderr)
-            start = time.time()
-            while time.time() - start < args.max_wait:
-                result = client.query_task(task_id)
-                data = result.get("data", {})
-                st = data.get("status", "")
-                if st == TaskStatus.COMPLETED.value:
-                    break
-                if st in ("failed", "error"):
-                    raise Exception(data.get("err_msg", "生成失败"))
-                time.sleep(args.poll_interval)
-            else:
-                raise Exception(f"等待超时 ({args.max_wait}秒)")
-            image_urls = client.extract_image_urls(result)
-            downloaded = download_images(image_urls, args.output_dir) if args.download and image_urls else None
-            view_urls = [to_view_url(u) for u in image_urls]
-            if args.json:
-                display = "\n".join([f"[查看图片 {i+1}]({u})" for i, u in enumerate(view_urls)])
-                out = {"prompt": args.prompt, "display": display, "imageCount": len(image_urls)}
-                if downloaded:
-                    out["downloadedFiles"] = downloaded
-                print(json.dumps(out, ensure_ascii=False, indent=2))
-            else:
-                print("\n" + "=" * 60)
-                print("图像生成完成")
-                print("=" * 60)
-                print(f"提示词: {args.prompt}")
-                for i, (v, d) in enumerate(zip(view_urls, image_urls), 1):
-                    print(f"图像 #{i} 查看: {v}")
-                    print(f"图像 #{i} 下载: {d}")
-                if downloaded:
-                    print("下载文件:", downloaded)
-                print("=" * 60)
-        else:
-            _save_prompt(task_id, args.prompt)
-            print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
+        print(json.dumps({"status": "started", "task_id": task_id}, ensure_ascii=False))
 
     except Exception as e:
         print(f"✗ 错误: {e}", file=sys.stderr)
