@@ -14,6 +14,8 @@ metadata:
   }
 ---
 
+简体中文 | [English](./SKILL.md)
+
 # Giggle 图像生成（多模型）
 
 通过 giggle.pro 平台的 Generation API 生成 AI 图像，支持多种模型。

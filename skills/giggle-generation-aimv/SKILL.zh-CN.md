@@ -14,6 +14,8 @@ metadata:
   }
 ---
 
+简体中文 | [English](./SKILL.md)
+
 # MV Trustee 模式 API 技能
 
 调用 MV trustee 模式 API 运行完整 MV 生成工作流。**项目创建与任务提交在脚本内合并为一步**——只需调用一次 `execute_workflow`；切勿分开调用 create 和 submit。

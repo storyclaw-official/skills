@@ -14,6 +14,8 @@ metadata:
   }
 ---
 
+简体中文 | [English](./SKILL.md)
+
 # Giggle 音乐
 
 通过 giggle.pro 平台生成 AI 音乐。支持简化模式和自定义模式。

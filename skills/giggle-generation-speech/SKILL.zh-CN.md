@@ -12,6 +12,8 @@ metadata:
   }
 ---
 
+简体中文 | [English](./SKILL.md)
+
 # 文转音（Text-to-Audio）
 
 通过 giggle.pro 平台将文本合成为 AI 语音/配音。支持多种音色、情绪和语速。

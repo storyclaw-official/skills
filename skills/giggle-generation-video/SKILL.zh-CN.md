@@ -12,8 +12,10 @@ metadata:
         "requires": { "bins": ["python3"], "env": ["GIGGLE_API_KEY"] },
         "primaryEnv": "GIGGLE_API_KEY",
       },
+  }
+---
 
-##   }
+简体中文 | [English](./SKILL.md)
 
 # Giggle 视频生成
 
