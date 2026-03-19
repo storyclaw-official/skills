@@ -1,6 +1,32 @@
 ---
 name: storyclaw-autoposter
-description: Use this skill whenever the user wants to publish, schedule, query, manage, or analyze posts on social media using StoryClaw. Triggers when user mentions posting to any social platform (TikTok, Instagram, Facebook, Twitter, YouTube, LinkedIn, Threads, Pinterest, Reddit, Bluesky, Telegram, Snapchat, Google Business), automating social media content, scheduling posts, optimizing post content, querying post history, viewing post details, deleting posts, checking analytics, views, likes, followers, or engagement data. Also triggers when user says things like "帮我发帖", "自动发帖", "定时发帖", "查看帖子", "帖子数据", "观看量", "粉丝数", "账号分析", or shares a StoryClaw API key.
+description: "Supports publishing, scheduling, querying, managing, and analyzing posts across 13 social platforms via StoryClaw. Use when the user wants to post to TikTok, Instagram, Facebook, X/Twitter, YouTube, LinkedIn, Threads, Pinterest, Reddit, Bluesky, Telegram, Snapchat, or Google Business Profile. Use cases: (1) Publish or schedule a post with optional media, (2) Query post history or view post details, (3) View post or account analytics (likes, views, followers, reach), (4) Delete a post. Triggers: 帮我发帖, 自动发帖, 定时发帖, 查看帖子, 帖子数据, 观看量, 粉丝数, 账号分析, post to social media, schedule post, social media analytics."
+version: "1.0.0"
+license: MIT
+author: storyclaw-official
+homepage: https://storyclaw.com
+repository: https://github.com/storyclaw-official/skills
+requires:
+  bins: [python3]
+  env: [STORYCLAW_API_KEY]
+  pip: [requests]
+metadata:
+  {
+    "openclaw": {
+      "emoji": "📱",
+      "requires": {
+        "bins": ["python3"],
+        "env": ["STORYCLAW_API_KEY"],
+        "pip": ["requests"]
+      },
+      "primaryEnv": "STORYCLAW_API_KEY",
+      "installSpec": {
+        "bins": ["python3"],
+        "env": ["STORYCLAW_API_KEY"],
+        "pip": ["requests"]
+      }
+    }
+  }
 ---
 
 # StoryClaw Auto-Post Skill
@@ -13,34 +39,40 @@ Supports full social media post management and analytics across 13 platforms.
 
 ---
 
-## Phase 1: Confirm Account Binding
+## Phase 1: API Key Check & Account Binding Confirmation
 
-Ask the user:
-> "Before we start, please confirm: have you linked your social accounts (TikTok, Instagram, etc.) in your StoryClaw.com profile?"
+### Step 1: Check API Key
 
-- Yes → Phase 2
-- No → Guide: "Please go to StoryClaw.com → Login → Profile, and follow the instructions to link your accounts. Come back when done."
+First, check if `STORYCLAW_API_KEY` is available in the environment variable.
 
----
+- **Available** → Use it directly, proceed to Step 2
+- **Not available** → Ask the user:
+  > "To get started, I need your StoryClaw API Key. Please go to **https://storyclaw.com/profile** → **StoryClaw API Key**, copy it and paste it here."
 
-## Phase 2: Get and Verify API Key
-
-> "Please go to StoryClaw.com → Profile → StoryClaw API Key, copy your key and paste it here (format: `sk_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)."
-
-Call `get_social_status` to verify:
+Once the key is obtained (from env or user input), call `get_social_status` to verify:
 
 ```json
-{ "storyclaw_api_key": "<key>", "action": "get_social_status" }
+{ "storyclaw_api_key": "<STORYCLAW_API_KEY>", "action": "get_social_status" }
 ```
 
-- 401 → Key invalid, ask user to recheck
-- Success → Record connected platforms, show to user, proceed to Phase 3
+- 401 Invalid API key → Tell the user:
+  > "Your API Key appears to be invalid. Please go to **https://storyclaw.com/profile** → **StoryClaw API Key** to check and recopy it."
+- Success → Record connected platforms, proceed to Step 2
+
+### Step 2: Confirm Social Account Binding
+
+Show the user their connected platforms returned by `get_social_status`.
+
+If no platforms are connected, or the user asks how to link social accounts, guide them:
+> "Please go to **https://storyclaw.com/profile** → **Social Account Binding**, and follow the instructions to link your TikTok, Instagram, or other accounts. Come back once done."
+
+If at least one platform is connected → proceed to Phase 2.
 
 **Only connected platforms appear as options throughout all operations.**
 
 ---
 
-## Phase 3: Select Feature
+## Phase 2: Select Feature
 
 Ask what the user needs:
 
